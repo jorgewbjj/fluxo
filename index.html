@@ -8,18 +8,39 @@
         body {
             font-family: Arial, sans-serif;
             margin: 20px;
+            overflow-x: hidden;
+        }
+        .table-container {
+            overflow-x: auto;
+            max-width: 100%;
+            margin-top: 20px;
+            max-height: 80vh;
         }
         table {
             border-collapse: collapse;
-            margin-top: 20px;
+            min-width: 1200px;
         }
         th, td {
             border: 1px solid #ddd;
             padding: 8px;
             text-align: center;
+            min-width: 120px;
         }
         th {
             background-color: #f2f2f2;
+            position: sticky;
+            top: 0;
+            z-index: 2;
+        }
+        td:first-child, th:first-child {
+            position: sticky;
+            left: 0;
+            background: white;
+            z-index: 1;
+            min-width: 200px;
+        }
+        .saldo {
+            background-color: #e6ffe6;
         }
         input {
             width: 100px;
@@ -28,12 +49,11 @@
         }
         .category-input {
             margin: 10px 0;
-        }
-        .saldo {
-            background-color: #e6ffe6;
-        }
-        .mes-header {
-            min-width: 120px;
+            position: sticky;
+            left: 0;
+            background: white;
+            z-index: 3;
+            padding: 10px 0;
         }
         #chartContainer {
             margin-top: 40px;
@@ -49,20 +69,22 @@
         <button onclick="addCategory()">Adicionar Categoria</button>
     </div>
 
-    <table id="fluxoTable">
-        <tr>
-            <th>Categoria/Mês</th>
-        </tr>
-        <tr id="salarioRow">
-            <td>Salário</td>
-        </tr>
-        <tr id="gastosHeader">
-            <td>Gastos</td>
-        </tr>
-        <tr id="saldoRow">
-            <td class="saldo">Saldo</td>
-        </tr>
-    </table>
+    <div class="table-container">
+        <table id="fluxoTable">
+            <tr>
+                <th>Categoria/Mês</th>
+            </tr>
+            <tr id="salarioRow">
+                <td>Salário</td>
+            </tr>
+            <tr id="gastosHeader">
+                <td>Gastos</td>
+            </tr>
+            <tr id="saldoRow">
+                <td class="saldo">Saldo</td>
+            </tr>
+        </table>
+    </div>
 
     <div id="chartContainer">
         <canvas id="myChart"></canvas>
