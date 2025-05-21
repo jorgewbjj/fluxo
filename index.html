@@ -2,7 +2,8 @@
 <html lang="pt-br">
 <head>
     <meta charset="UTF-8">
-    <title>Fluxo de Caixa Inteligente</title>
+    <title>Fluxo de Caixa Projetivo</title>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <style>
         body {
             font-family: Arial, sans-serif;
@@ -21,8 +22,9 @@
             background-color: #f2f2f2;
         }
         input {
-            width: 80px;
+            width: 100px;
             text-align: right;
+            padding: 4px;
         }
         .category-input {
             margin: 10px 0;
@@ -31,12 +33,16 @@
             background-color: #e6ffe6;
         }
         .mes-header {
-            min-width: 100px;
+            min-width: 120px;
+        }
+        #chartContainer {
+            margin-top: 40px;
+            max-width: 800px;
         }
     </style>
 </head>
 <body>
-    <h1>Controle de Fluxo de Caixa</h1>
+    <h1>Controle de Fluxo de Caixa - Projeção 24 Meses</h1>
     
     <div class="category-input">
         <input type="text" id="newCategory" placeholder="Nova categoria">
@@ -58,19 +64,31 @@
         </tr>
     </table>
 
+    <div id="chartContainer">
+        <canvas id="myChart"></canvas>
+    </div>
+
     <script>
+        let myChart = null;
         const meses = [];
         const today = new Date();
         
-        // Gerar meses com identificadores únicos
-        for (let i = 0; i < 12; i++) {
+        // Gerar 24 meses
+        for (let i = 0; i < 24; i++) {
             const date = new Date(today.getFullYear(), today.getMonth() + i, 1);
             const mesKey = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`;
             meses.push({
                 key: mesKey,
-                name: date.toLocaleString('default', { month: 'long' }),
+                name: date.toLocaleString('pt-BR', { month: 'long' }),
                 year: date.getFullYear()
             });
+        }
+
+        function formatCurrency(value) {
+            return new Intl.NumberFormat('pt-BR', {
+                style: 'currency',
+                currency: 'BRL'
+            }).format(value);
         }
 
         // Inicializar tabela
@@ -80,31 +98,25 @@
             const saldoRow = document.querySelector('#saldoRow');
 
             meses.forEach(mes => {
-                // Adicionar meses no header
                 headerRow.innerHTML += `<th class="mes-header">${mes.name}/${mes.year}</th>`;
-
-                // Adicionar inputs para salário
+                
                 salarioRow.innerHTML += `
                     <td>
                         <input type="number" 
                                id="salario_${mes.key}" 
                                data-mes="${mes.key}"
+                               step="100"
                                value="0">
                     </td>`;
 
-                // Adicionar células para saldo
-                saldoRow.innerHTML += `<td class="saldo" id="saldo_${mes.key}">0</td>`;
+                saldoRow.innerHTML += `<td class="saldo" id="saldo_${mes.key}">${formatCurrency(0)}</td>`;
             });
 
-            // Carregar dados salvos
             loadSavedData();
-            // Adicionar listeners
             addAutoSaveListeners();
-            // Calcular inicial
             calculate();
         }
 
-        // Adicionar nova categoria
         function addCategory() {
             const categoryName = document.getElementById('newCategory').value;
             if (!categoryName) return;
@@ -118,6 +130,7 @@
                         <input type="number" 
                                id="${categoryName}_${mes.key}"
                                data-mes="${mes.key}"
+                               step="100"
                                value="0">
                     </td>`;
             });
@@ -125,13 +138,11 @@
             document.querySelector('#gastosHeader').insertAdjacentElement('afterend', newRow);
             document.getElementById('newCategory').value = '';
             
-            // Carregar dados e adicionar listeners para novos inputs
             loadSavedDataForRow(newRow);
             addAutoSaveListenersForRow(newRow);
             calculate();
         }
 
-        // Carregar dados salvos
         function loadSavedData() {
             document.querySelectorAll('input[type="number"]').forEach(input => {
                 const savedValue = localStorage.getItem(input.id);
@@ -141,7 +152,6 @@
             });
         }
 
-        // Carregar dados para nova linha
         function loadSavedDataForRow(row) {
             row.querySelectorAll('input').forEach(input => {
                 const savedValue = localStorage.getItem(input.id);
@@ -151,7 +161,6 @@
             });
         }
 
-        // Adicionar listeners de autosave
         function addAutoSaveListeners() {
             document.querySelectorAll('input[type="number"]').forEach(input => {
                 input.addEventListener('input', function() {
@@ -161,7 +170,6 @@
             });
         }
 
-        // Adicionar listeners para nova linha
         function addAutoSaveListenersForRow(row) {
             row.querySelectorAll('input').forEach(input => {
                 input.addEventListener('input', function() {
@@ -171,33 +179,77 @@
             });
         }
 
-        // Calcular fluxo
         function calculate() {
             let saldoAnterior = 0;
+            const saldos = [];
 
             meses.forEach(mes => {
-                // Calcular total de gastos
                 let totalGastos = 0;
                 document.querySelectorAll('#gastosHeader ~ tr:not(#saldoRow)').forEach(row => {
                     const input = row.querySelector(`input[data-mes="${mes.key}"]`);
                     if (input) totalGastos += Number(input.value);
                 });
 
-                // Calcular saldo
                 const salario = Number(document.getElementById(`salario_${mes.key}`).value);
                 const saldoAtual = saldoAnterior + salario - totalGastos;
                 
-                document.getElementById(`saldo_${mes.key}`).textContent = saldoAtual.toFixed(2);
+                document.getElementById(`saldo_${mes.key}`).textContent = formatCurrency(saldoAtual);
+                saldos.push(saldoAtual);
                 saldoAnterior = saldoAtual;
+            });
+
+            updateChart(saldos.slice(0, 12));
+        }
+
+        function updateChart(saldos) {
+            const ctx = document.getElementById('myChart').getContext('2d');
+            
+            if (myChart) {
+                myChart.destroy();
+            }
+
+            myChart = new Chart(ctx, {
+                type: 'line',
+                data: {
+                    labels: meses.slice(0, 12).map(m => `${m.name}/${m.year}`),
+                    datasets: [{
+                        label: 'Saldo Acumulado (12 meses)',
+                        data: saldos,
+                        borderColor: '#4CAF50',
+                        tension: 0.1,
+                        fill: false
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    plugins: {
+                        tooltip: {
+                            callbacks: {
+                                label: function(context) {
+                                    return formatCurrency(context.raw);
+                                }
+                            }
+                        }
+                    },
+                    scales: {
+                        y: {
+                            ticks: {
+                                callback: function(value) {
+                                    return formatCurrency(value);
+                                }
+                            }
+                        }
+                    }
+                }
             });
         }
 
         // Inicializar
         initTable();
         
-        // Adicionar categorias exemplo
+        // Exemplo de categorias
         setTimeout(() => {
-            ['Aluguel', 'Supermercado'].forEach(cat => {
+            ['Aluguel', 'Alimentação', 'Transporte'].forEach(cat => {
                 document.getElementById('newCategory').value = cat;
                 addCategory();
             });
