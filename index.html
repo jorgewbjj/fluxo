@@ -59,6 +59,19 @@
             margin-top: 40px;
             max-width: 800px;
         }
+        .category-actions {
+            display: inline-block;
+            margin-left: 10px;
+        }
+        .drag-handle {
+            cursor: move;
+            color: #666;
+            margin: 0 5px;
+        }
+        .edit-input {
+            width: 120px;
+            padding: 2px;
+        }
     </style>
 </head>
 <body>
@@ -94,7 +107,9 @@
         let myChart = null;
         const meses = [];
         const today = new Date();
-        
+        let categories = JSON.parse(localStorage.getItem('categories')) || [];
+        let draggedRow = null;
+
         // Gerar 24 meses
         for (let i = 0; i < 24; i++) {
             const date = new Date(today.getFullYear(), today.getMonth() + i, 1);
@@ -136,6 +151,7 @@
 
             loadSavedData();
             addAutoSaveListeners();
+            loadCategories();
             calculate();
         }
 
@@ -143,8 +159,25 @@
             const categoryName = document.getElementById('newCategory').value;
             if (!categoryName) return;
 
+            categories.push(categoryName);
+            saveCategories();
+            createCategoryRow(categoryName);
+            document.getElementById('newCategory').value = '';
+        }
+
+        function createCategoryRow(categoryName) {
             const newRow = document.createElement('tr');
-            newRow.innerHTML = `<td>${categoryName}</td>`;
+            newRow.draggable = true;
+            newRow.innerHTML = `
+                <td>
+                    <span class="category-name">${categoryName}</span>
+                    <div class="category-actions">
+                        <span class="drag-handle">↕</span>
+                        <button onclick="editCategory(this)">✏️</button>
+                        <button onclick="deleteCategory(this)">❌</button>
+                    </div>
+                </td>
+            `;
 
             meses.forEach(mes => {
                 newRow.innerHTML += `
@@ -158,11 +191,113 @@
             });
 
             document.querySelector('#gastosHeader').insertAdjacentElement('afterend', newRow);
-            document.getElementById('newCategory').value = '';
             
+            addRowListeners(newRow);
             loadSavedDataForRow(newRow);
             addAutoSaveListenersForRow(newRow);
             calculate();
+        }
+
+        function editCategory(button) {
+            const row = button.closest('tr');
+            const nameCell = row.querySelector('.category-name');
+            const currentName = nameCell.textContent;
+            
+            const input = document.createElement('input');
+            input.type = 'text';
+            input.value = currentName;
+            input.className = 'edit-input';
+            
+            input.onblur = function() {
+                const newName = this.value;
+                if (newName && newName !== currentName) {
+                    updateCategoryName(currentName, newName);
+                }
+                nameCell.textContent = newName;
+                input.replaceWith(nameCell);
+            };
+            
+            nameCell.replaceWith(input);
+            input.focus();
+        }
+
+        function updateCategoryName(oldName, newName) {
+            // Atualizar localStorage
+            meses.forEach(mes => {
+                const oldKey = `${oldName}_${mes.key}`;
+                const newKey = `${newName}_${mes.key}`;
+                const value = localStorage.getItem(oldKey);
+                
+                if (value !== null) {
+                    localStorage.setItem(newKey, value);
+                    localStorage.removeItem(oldKey);
+                }
+            });
+
+            // Atualizar inputs
+            document.querySelectorAll(`input[id^="${oldName}_"]`).forEach(input => {
+                input.id = input.id.replace(oldName, newName);
+            });
+
+            // Atualizar array de categorias
+            const index = categories.indexOf(oldName);
+            if (index > -1) {
+                categories[index] = newName;
+                saveCategories();
+            }
+        }
+
+        function deleteCategory(button) {
+            const row = button.closest('tr');
+            const categoryName = row.querySelector('.category-name').textContent;
+            
+            // Remover do localStorage
+            meses.forEach(mes => {
+                localStorage.removeItem(`${categoryName}_${mes.key}`);
+            });
+
+            // Remover da lista de categorias
+            categories = categories.filter(cat => cat !== categoryName);
+            saveCategories();
+
+            // Remover da tabela
+            row.remove();
+            calculate();
+        }
+
+        function saveCategories() {
+            localStorage.setItem('categories', JSON.stringify(categories));
+        }
+
+        function loadCategories() {
+            categories.forEach(cat => createCategoryRow(cat));
+        }
+
+        function addRowListeners(row) {
+            row.addEventListener('dragstart', () => draggedRow = row);
+            row.addEventListener('dragover', e => e.preventDefault());
+            row.addEventListener('drop', e => {
+                e.preventDefault();
+                if (draggedRow && draggedRow !== row) {
+                    const rows = Array.from(document.querySelectorAll('#gastosHeader ~ tr:not(#saldoRow)'));
+                    const oldIndex = rows.indexOf(draggedRow);
+                    const newIndex = rows.indexOf(row);
+                    
+                    if (oldIndex < newIndex) {
+                        row.insertAdjacentElement('afterend', draggedRow);
+                    } else {
+                        row.insertAdjacentElement('beforebegin', draggedRow);
+                    }
+                    
+                    updateCategoriesOrder();
+                }
+            });
+        }
+
+        function updateCategoriesOrder() {
+            categories = Array.from(document.querySelectorAll('#gastosHeader ~ tr:not(#saldoRow)'))
+                .map(row => row.querySelector('.category-name').textContent);
+            saveCategories();
         }
 
         function loadSavedData() {
@@ -268,14 +403,6 @@
 
         // Inicializar
         initTable();
-        
-        // Exemplo de categorias
-        setTimeout(() => {
-            ['Aluguel', 'Alimentação', 'Transporte'].forEach(cat => {
-                document.getElementById('newCategory').value = cat;
-                addCategory();
-            });
-        }, 100);
     </script>
 </body>
 </html>
