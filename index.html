@@ -1,0 +1,137 @@
+<!DOCTYPE html>
+<html lang="pt-br">
+<head>
+    <meta charset="UTF-8">
+    <title>Fluxo de Caixa</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            margin: 20px;
+        }
+        table {
+            border-collapse: collapse;
+            margin-top: 20px;
+        }
+        th, td {
+            border: 1px solid #ddd;
+            padding: 8px;
+            text-align: center;
+        }
+        th {
+            background-color: #f2f2f2;
+        }
+        input {
+            width: 80px;
+            text-align: right;
+        }
+        .category-input {
+            margin: 10px 0;
+        }
+        .saldo {
+            background-color: #e6ffe6;
+        }
+    </style>
+</head>
+<body>
+    <h1>Controle de Fluxo de Caixa</h1>
+    
+    <div class="category-input">
+        <input type="text" id="newCategory" placeholder="Nova categoria">
+        <button onclick="addCategory()">Adicionar Categoria</button>
+    </div>
+
+    <table id="fluxoTable">
+        <tr>
+            <th>Categoria/Mês</th>
+        </tr>
+        <tr id="salarioRow">
+            <td>Salário</td>
+        </tr>
+        <tr id="gastosHeader">
+            <td>Gastos</td>
+        </tr>
+        <tr id="saldoRow">
+            <td class="saldo">Saldo</td>
+        </tr>
+    </table>
+
+    <button onclick="calculate()" style="margin-top: 20px;">Calcular Fluxo</button>
+
+    <script>
+        const meses = [];
+        const today = new Date();
+        
+        // Gerar meses
+        for (let i = 0; i < 12; i++) {
+            const date = new Date(today.getFullYear(), today.getMonth() + i, 1);
+            meses.push(date.toLocaleString('default', { month: 'long' }));
+        }
+
+        // Inicializar tabela
+        function initTable() {
+            const headerRow = document.querySelector('#fluxoTable tr:first-child');
+            const salarioRow = document.querySelector('#salarioRow');
+            const saldoRow = document.querySelector('#saldoRow');
+
+            meses.forEach((mes, index) => {
+                // Adicionar meses no header
+                headerRow.innerHTML += `<th>${mes}</th>`;
+
+                // Adicionar inputs para salário
+                salarioRow.innerHTML += `<td><input type="number" id="salario_${index}" value="0"></td>`;
+
+                // Adicionar células para saldo
+                saldoRow.innerHTML += `<td class="saldo" id="saldo_${index}">0</td>`;
+            });
+        }
+
+        // Adicionar nova categoria
+        function addCategory() {
+            const categoryName = document.getElementById('newCategory').value;
+            if (!categoryName) return;
+
+            const newRow = document.createElement('tr');
+            newRow.innerHTML = `<td>${categoryName}</td>`;
+
+            meses.forEach((_, index) => {
+                newRow.innerHTML += `<td><input type="number" id="${categoryName}_${index}" value="0"></td>`;
+            });
+
+            document.querySelector('#gastosHeader').insertAdjacentElement('afterend', newRow);
+            document.getElementById('newCategory').value = '';
+        }
+
+        // Calcular fluxo
+        function calculate() {
+            let saldoAnterior = 0;
+
+            meses.forEach((_, index) => {
+                // Calcular total de gastos
+                let totalGastos = 0;
+                document.querySelectorAll('#gastosHeader ~ tr:not(#saldoRow)').forEach(row => {
+                    const input = row.querySelector(`td:nth-child(${index + 2}) input`);
+                    if (input) totalGastos += Number(input.value);
+                });
+
+                // Calcular saldo
+                const salario = Number(document.getElementById(`salario_${index}`).value);
+                const saldoAtual = saldoAnterior + salario - totalGastos;
+                
+                document.getElementById(`saldo_${index}`).textContent = saldoAtual.toFixed(2);
+                saldoAnterior = saldoAtual;
+            });
+        }
+
+        // Inicializar
+        initTable();
+        
+        // Adicionar categorias exemplo
+        setTimeout(() => {
+            ['Aluguel', 'Supermercado'].forEach(cat => {
+                document.getElementById('newCategory').value = cat;
+                addCategory();
+            });
+        }, 100);
+    </script>
+</body>
+</html>
