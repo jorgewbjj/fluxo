@@ -67,10 +67,29 @@
             cursor: move;
             color: #666;
             margin: 0 5px;
+            display: none;
         }
         .edit-input {
             width: 120px;
             padding: 2px;
+        }
+        .toggle-actions {
+            cursor: pointer;
+            padding: 5px 10px;
+            background: #f0f0f0;
+            border-radius: 4px;
+            margin-left: 10px;
+        }
+        .show-actions .drag-handle,
+        .show-actions .category-actions button {
+            display: inline-block;
+        }
+        .category-actions button {
+            display: none;
+            margin-left: 5px;
+            cursor: pointer;
+            background: none;
+            border: none;
         }
     </style>
 </head>
@@ -80,6 +99,7 @@
     <div class="category-input">
         <input type="text" id="newCategory" placeholder="Nova categoria">
         <button onclick="addCategory()">Adicionar Categoria</button>
+        <span class="toggle-actions" onclick="toggleActions()">▼ Mostrar Controles</span>
     </div>
 
     <div class="table-container">
@@ -109,6 +129,7 @@
         const today = new Date();
         let categories = JSON.parse(localStorage.getItem('categories')) || [];
         let draggedRow = null;
+        let showActions = localStorage.getItem('showActions') === 'true';
 
         // Gerar 24 meses
         for (let i = 0; i < 24; i++) {
@@ -128,11 +149,14 @@
             }).format(value);
         }
 
-        // Inicializar tabela
         function initTable() {
             const headerRow = document.querySelector('#fluxoTable tr:first-child');
             const salarioRow = document.querySelector('#salarioRow');
             const saldoRow = document.querySelector('#saldoRow');
+
+            headerRow.innerHTML = '<th>Categoria/Mês</th>';
+            salarioRow.innerHTML = '<td>Salário</td>';
+            saldoRow.innerHTML = '<td class="saldo">Saldo</td>';
 
             meses.forEach(mes => {
                 headerRow.innerHTML += `<th class="mes-header">${mes.name}/${mes.year}</th>`;
@@ -153,11 +177,14 @@
             addAutoSaveListeners();
             loadCategories();
             calculate();
+            updateActionsVisibility();
+            document.querySelector('.toggle-actions').textContent = 
+                `${showActions ? '▲ Ocultar' : '▼ Mostrar'} Controles`;
         }
 
         function addCategory() {
-            const categoryName = document.getElementById('newCategory').value;
-            if (!categoryName) return;
+            const categoryName = document.getElementById('newCategory').value.trim();
+            if (!categoryName || categories.includes(categoryName)) return;
 
             categories.push(categoryName);
             saveCategories();
@@ -167,7 +194,8 @@
 
         function createCategoryRow(categoryName) {
             const newRow = document.createElement('tr');
-            newRow.draggable = true;
+            newRow.draggable = showActions;
+            newRow.classList.toggle('show-actions', showActions);
             newRow.innerHTML = `
                 <td>
                     <span class="category-name">${categoryName}</span>
@@ -198,6 +226,22 @@
             calculate();
         }
 
+        function toggleActions() {
+            showActions = !showActions;
+            localStorage.setItem('showActions', showActions);
+            updateActionsVisibility();
+            document.querySelector('.toggle-actions').textContent = 
+                `${showActions ? '▲ Ocultar' : '▼ Mostrar'} Controles`;
+        }
+
+        function updateActionsVisibility() {
+            const rows = document.querySelectorAll('#gastosHeader ~ tr:not(#saldoRow)');
+            rows.forEach(row => {
+                row.classList.toggle('show-actions', showActions);
+                row.draggable = showActions;
+            });
+        }
+
         function editCategory(button) {
             const row = button.closest('tr');
             const nameCell = row.querySelector('.category-name');
@@ -209,11 +253,11 @@
             input.className = 'edit-input';
             
             input.onblur = function() {
-                const newName = this.value;
+                const newName = this.value.trim();
                 if (newName && newName !== currentName) {
                     updateCategoryName(currentName, newName);
                 }
-                nameCell.textContent = newName;
+                nameCell.textContent = newName || currentName;
                 input.replaceWith(nameCell);
             };
             
@@ -222,7 +266,6 @@
         }
 
         function updateCategoryName(oldName, newName) {
-            // Atualizar localStorage
             meses.forEach(mes => {
                 const oldKey = `${oldName}_${mes.key}`;
                 const newKey = `${newName}_${mes.key}`;
@@ -234,12 +277,10 @@
                 }
             });
 
-            // Atualizar inputs
             document.querySelectorAll(`input[id^="${oldName}_"]`).forEach(input => {
                 input.id = input.id.replace(oldName, newName);
             });
 
-            // Atualizar array de categorias
             const index = categories.indexOf(oldName);
             if (index > -1) {
                 categories[index] = newName;
@@ -251,16 +292,15 @@
             const row = button.closest('tr');
             const categoryName = row.querySelector('.category-name').textContent;
             
-            // Remover do localStorage
+            if (!confirm(`Tem certeza que deseja excluir a categoria "${categoryName}"?`)) return;
+
             meses.forEach(mes => {
                 localStorage.removeItem(`${categoryName}_${mes.key}`);
             });
 
-            // Remover da lista de categorias
             categories = categories.filter(cat => cat !== categoryName);
             saveCategories();
 
-            // Remover da tabela
             row.remove();
             calculate();
         }
