@@ -2,7 +2,7 @@
 <html lang="pt-br">
 <head>
     <meta charset="UTF-8">
-    <title>Fluxo de Caixa Projetivo</title>
+    <title>Fluxo de Caixa Histórico</title>
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <style>
         body {
@@ -18,7 +18,7 @@
         }
         table {
             border-collapse: collapse;
-            min-width: 1200px;
+            min-width: 1400px;
         }
         th, td {
             border: 1px solid #ddd;
@@ -58,7 +58,7 @@
             text-align: right;
             padding: 4px;
         }
-        .category-input {
+        .category-input, .period-controls {
             margin: 10px 0;
             position: sticky;
             left: 0;
@@ -102,11 +102,22 @@
             background: none;
             border: none;
         }
+        .period-controls button {
+            padding: 5px 10px;
+            margin: 0 5px;
+            cursor: pointer;
+        }
     </style>
 </head>
 <body>
-    <h1>Controle de Fluxo de Caixa - Projeção 24 Meses</h1>
+    <h1>Controle de Fluxo de Caixa - Histórico Completo</h1>
     
+    <div class="period-controls">
+        <button onclick="changePeriod(-1)">◄ Mês Anterior</button>
+        <span id="currentPeriod"></span>
+        <button onclick="changePeriod(1)">Próximo Mês ►</button>
+    </div>
+
     <div class="category-input">
         <input type="text" id="newCategory" placeholder="Nova categoria">
         <button onclick="addCategory()">Adicionar Categoria</button>
@@ -137,20 +148,38 @@
     <script>
         let myChart = null;
         const meses = [];
-        const today = new Date();
+        let currentDate = new Date(localStorage.getItem('currentDate') || new Date());
         let categories = JSON.parse(localStorage.getItem('categories')) || [];
         let draggedRow = null;
         let showActions = localStorage.getItem('showActions') === 'true';
 
-        // Gerar 24 meses
-        for (let i = 0; i < 24; i++) {
-            const date = new Date(today.getFullYear(), today.getMonth() + i, 1);
-            const mesKey = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`;
-            meses.push({
-                key: mesKey,
-                name: date.toLocaleString('pt-BR', { month: 'long' }),
-                year: date.getFullYear()
-            });
+        function generateMonths() {
+            meses.length = 0;
+            const startDate = new Date(currentDate);
+            startDate.setMonth(startDate.getMonth() - 12);
+
+            for (let i = 0; i < 36; i++) {
+                const date = new Date(startDate);
+                date.setMonth(date.getMonth() + i);
+                const mesKey = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`;
+                meses.push({
+                    key: mesKey,
+                    date: date,
+                    name: date.toLocaleString('pt-BR', { month: 'long' }),
+                    year: date.getFullYear()
+                });
+            }
+            
+            const start = meses[0].date;
+            const end = meses[meses.length-1].date;
+            document.getElementById('currentPeriod').textContent = 
+                `Exibindo: ${start.toLocaleDateString('pt-BR', {month: 'long', year: 'numeric'})} - ${end.toLocaleDateString('pt-BR', {month: 'long', year: 'numeric'})}`;
+        }
+
+        function changePeriod(offset) {
+            currentDate.setMonth(currentDate.getMonth() + offset);
+            localStorage.setItem('currentDate', currentDate);
+            initTable();
         }
 
         function formatCurrency(value) {
@@ -161,6 +190,7 @@
         }
 
         function initTable() {
+            generateMonths();
             const headerRow = document.querySelector('#fluxoTable tr:first-child');
             const salarioRow = document.querySelector('#salarioRow');
             const saldoRow = document.querySelector('#saldoRow');
@@ -406,12 +436,16 @@
                 saldoAnterior = saldoAtual;
             });
 
-            updateChart(saldos.slice(0, 12));
+            updateChart(saldos);
         }
 
         function updateChart(saldos) {
             const ctx = document.getElementById('myChart').getContext('2d');
-            
+            const currentMonthIndex = meses.findIndex(m => m.date >= new Date());
+            const chartData = saldos.slice(currentMonthIndex, currentMonthIndex + 12);
+            const chartLabels = meses.slice(currentMonthIndex, currentMonthIndex + 12)
+                .map(m => `${m.name}/${m.year}`);
+
             if (myChart) {
                 myChart.destroy();
             }
@@ -419,10 +453,10 @@
             myChart = new Chart(ctx, {
                 type: 'line',
                 data: {
-                    labels: meses.slice(0, 12).map(m => `${m.name}/${m.year}`),
+                    labels: chartLabels,
                     datasets: [{
-                        label: 'Saldo Acumulado (12 meses)',
-                        data: saldos,
+                        label: 'Projeção do Saldo (12 meses)',
+                        data: chartData,
                         borderColor: '#4CAF50',
                         tension: 0.1,
                         fill: false
@@ -452,7 +486,26 @@
             });
         }
 
-        // Inicializar
+        function cleanOldData() {
+            const twoYearsAgo = new Date();
+            twoYearsAgo.setFullYear(twoYearsAgo.getFullYear() - 2);
+            
+            Object.keys(localStorage).forEach(key => {
+                const match = key.match(/(\d{4})-(\d{2})$/);
+                if (match) {
+                    const year = parseInt(match[1]);
+                    const month = parseInt(match[2]) - 1;
+                    const keyDate = new Date(year, month);
+                    
+                    if (keyDate < twoYearsAgo) {
+                        localStorage.removeItem(key);
+                    }
+                }
+            });
+        }
+
+        // Inicialização
+        cleanOldData();
         initTable();
     </script>
 </body>
