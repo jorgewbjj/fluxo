@@ -2,8 +2,10 @@
 <html lang="pt-br">
 <head>
     <meta charset="UTF-8">
-    <title>Fluxo de Caixa Histórico</title>
+    <title>Fluxo de Caixa com Firebase</title>
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.6.10/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.6.10/firebase-database-compat.js"></script>
     <style>
         body {
             font-family: Arial, sans-serif;
@@ -110,7 +112,7 @@
     </style>
 </head>
 <body>
-    <h1>Controle de Fluxo de Caixa - Histórico Completo</h1>
+    <h1>Controle de Fluxo de Caixa em Tempo Real</h1>
     
     <div class="period-controls">
         <button onclick="changePeriod(-1)">◄ Mês Anterior</button>
@@ -146,12 +148,28 @@
     </div>
 
     <script>
+        // Configuração do Firebase (Substitua com suas credenciais)
+        const firebaseConfig = {
+            apiKey: "SUA_API_KEY",
+            authDomain: "SEU_PROJETO.firebaseapp.com",
+            databaseURL: "https://SEU_PROJETO.firebaseio.com",
+            projectId: "SEU_PROJETO",
+            storageBucket: "SEU_PROJETO.appspot.com",
+            messagingSenderId: "SEU_SENDER_ID",
+            appId: "SEU_APP_ID"
+        };
+
+        // Inicialização do Firebase
+        const app = firebase.initializeApp(firebaseConfig);
+        const database = firebase.database();
+
         let myChart = null;
         const meses = [];
-        let currentDate = new Date(localStorage.getItem('currentDate') || new Date());
-        let categories = JSON.parse(localStorage.getItem('categories')) || [];
+        let currentDate = new Date();
+        let categories = [];
         let draggedRow = null;
-        let showActions = localStorage.getItem('showActions') === 'true';
+        let showActions = false;
+        let userId = null;
 
         function generateMonths() {
             meses.length = 0;
@@ -178,7 +196,6 @@
 
         function changePeriod(offset) {
             currentDate.setMonth(currentDate.getMonth() + offset);
-            localStorage.setItem('currentDate', currentDate);
             initTable();
         }
 
@@ -189,8 +206,38 @@
             }).format(value);
         }
 
-        function initTable() {
+        async function initTable() {
+            userId = localStorage.getItem('userId') || generateUserId();
+            localStorage.setItem('userId', userId);
+            
+            await loadUserData();
             generateMonths();
+            buildTableStructure();
+            await loadCategories();
+            await loadMonthData();
+            setupRealTimeUpdates();
+            calculate();
+            updateActionsVisibility();
+        }
+
+        function generateUserId() {
+            return 'user_' + Math.random().toString(36).substr(2, 9);
+        }
+
+        async function loadUserData() {
+            try {
+                const snapshot = await database.ref(`users/${userId}`).once('value');
+                const data = snapshot.val() || {};
+                
+                categories = data.categories || [];
+                showActions = data.settings?.showActions || false;
+                currentDate = new Date(data.settings?.currentDate || new Date());
+            } catch (error) {
+                console.error('Erro ao carregar dados:', error);
+            }
+        }
+
+        function buildTableStructure() {
             const headerRow = document.querySelector('#fluxoTable tr:first-child');
             const salarioRow = document.querySelector('#salarioRow');
             const saldoRow = document.querySelector('#saldoRow');
@@ -201,36 +248,24 @@
 
             meses.forEach(mes => {
                 headerRow.innerHTML += `<th class="mes-header">${mes.name}/${mes.year}</th>`;
-                
-                salarioRow.innerHTML += `
-                    <td>
-                        <input type="number" 
-                               id="salario_${mes.key}" 
-                               data-mes="${mes.key}"
-                               step="100"
-                               value="0">
-                    </td>`;
-
+                salarioRow.innerHTML += `<td><input type="number" id="salario_${mes.key}" data-mes="${mes.key}" step="100"></td>`;
                 saldoRow.innerHTML += `<td class="saldo" id="saldo_${mes.key}">${formatCurrency(0)}</td>`;
             });
-
-            loadSavedData();
-            addAutoSaveListeners();
-            loadCategories();
-            calculate();
-            updateActionsVisibility();
-            document.querySelector('.toggle-actions').textContent = 
-                `${showActions ? '▲ Ocultar' : '▼ Mostrar'} Controles`;
         }
 
-        function addCategory() {
-            const categoryName = document.getElementById('newCategory').value.trim();
-            if (!categoryName || categories.includes(categoryName)) return;
+        async function loadCategories() {
+            const categoriesRef = database.ref(`users/${userId}/categories`);
+            categoriesRef.on('value', (snapshot) => {
+                categories = snapshot.val() || [];
+                rebuildCategoryRows();
+            });
+        }
 
-            categories.push(categoryName);
-            saveCategories();
-            createCategoryRow(categoryName);
-            document.getElementById('newCategory').value = '';
+        function rebuildCategoryRows() {
+            const existingRows = document.querySelectorAll('#gastosHeader ~ tr:not(#saldoRow)');
+            existingRows.forEach(row => row.remove());
+            
+            categories.forEach(cat => createCategoryRow(cat));
         }
 
         function createCategoryRow(categoryName) {
@@ -254,36 +289,71 @@
                         <input type="number" 
                                id="${categoryName}_${mes.key}"
                                data-mes="${mes.key}"
-                               step="100"
-                               value="0">
+                               step="100">
                     </td>`;
             });
 
             document.querySelector('#gastosHeader').insertAdjacentElement('afterend', newRow);
-            
             addRowListeners(newRow);
-            loadSavedDataForRow(newRow);
-            addAutoSaveListenersForRow(newRow);
-            calculate();
+            setupInputListeners(newRow);
         }
 
-        function toggleActions() {
-            showActions = !showActions;
-            localStorage.setItem('showActions', showActions);
-            updateActionsVisibility();
-            document.querySelector('.toggle-actions').textContent = 
-                `${showActions ? '▲ Ocultar' : '▼ Mostrar'} Controles`;
-        }
-
-        function updateActionsVisibility() {
-            const rows = document.querySelectorAll('#gastosHeader ~ tr:not(#saldoRow)');
-            rows.forEach(row => {
-                row.classList.toggle('show-actions', showActions);
-                row.draggable = showActions;
+        async function loadMonthData() {
+            const monthsRef = database.ref(`users/${userId}/months`);
+            monthsRef.on('value', (snapshot) => {
+                const monthsData = snapshot.val() || {};
+                Object.entries(monthsData).forEach(([monthKey, monthData]) => {
+                    // Carrega salário
+                    if (monthData.salario) {
+                        const input = document.getElementById(`salario_${monthKey}`);
+                        if (input) input.value = monthData.salario;
+                    }
+                    
+                    // Carrega categorias
+                    categories.forEach(cat => {
+                        const input = document.getElementById(`${cat}_${monthKey}`);
+                        if (input && monthData[cat]) input.value = monthData[cat];
+                    });
+                });
             });
         }
 
-        function editCategory(button) {
+        function setupInputListeners(row) {
+            row.querySelectorAll('input').forEach(input => {
+                input.addEventListener('input', async function() {
+                    const [category, monthKey] = this.id.split('_');
+                    await database.ref(`users/${userId}/months/${monthKey}/${category}`).set(this.value);
+                    calculate();
+                });
+            });
+        }
+
+        async function addCategory() {
+            const categoryName = document.getElementById('newCategory').value.trim();
+            if (!categoryName || categories.includes(categoryName)) return;
+
+            await database.ref(`users/${userId}/categories`).set([...categories, categoryName]);
+            document.getElementById('newCategory').value = '';
+        }
+
+        async function deleteCategory(button) {
+            const row = button.closest('tr');
+            const categoryName = row.querySelector('.category-name').textContent;
+            
+            if (!confirm(`Tem certeza que deseja excluir a categoria "${categoryName}"?`)) return;
+
+            const newCategories = categories.filter(cat => cat !== categoryName);
+            await database.ref(`users/${userId}/categories`).set(newCategories);
+            
+            // Remove dados dos meses
+            const updates = {};
+            meses.forEach(mes => {
+                updates[`/users/${userId}/months/${mes.key}/${categoryName}`] = null;
+            });
+            await database.ref().update(updates);
+        }
+
+        async function editCategory(button) {
             const row = button.closest('tr');
             const nameCell = row.querySelector('.category-name');
             const currentName = nameCell.textContent;
@@ -293,10 +363,10 @@
             input.value = currentName;
             input.className = 'edit-input';
             
-            input.onblur = function() {
+            input.onblur = async function() {
                 const newName = this.value.trim();
                 if (newName && newName !== currentName) {
-                    updateCategoryName(currentName, newName);
+                    await updateCategoryName(currentName, newName);
                 }
                 nameCell.textContent = newName || currentName;
                 input.replaceWith(nameCell);
@@ -306,137 +376,54 @@
             input.focus();
         }
 
-        function updateCategoryName(oldName, newName) {
-            meses.forEach(mes => {
-                const oldKey = `${oldName}_${mes.key}`;
-                const newKey = `${newName}_${mes.key}`;
-                const value = localStorage.getItem(oldKey);
-                
-                if (value !== null) {
-                    localStorage.setItem(newKey, value);
-                    localStorage.removeItem(oldKey);
-                }
-            });
-
-            document.querySelectorAll(`input[id^="${oldName}_"]`).forEach(input => {
-                input.id = input.id.replace(oldName, newName);
-            });
-
-            const index = categories.indexOf(oldName);
-            if (index > -1) {
-                categories[index] = newName;
-                saveCategories();
-            }
-        }
-
-        function deleteCategory(button) {
-            const row = button.closest('tr');
-            const categoryName = row.querySelector('.category-name').textContent;
+        async function updateCategoryName(oldName, newName) {
+            // Atualiza categorias
+            const newCategories = categories.map(cat => cat === oldName ? newName : cat);
+            await database.ref(`users/${userId}/categories`).set(newCategories);
             
-            if (!confirm(`Tem certeza que deseja excluir a categoria "${categoryName}"?`)) return;
-
+            // Atualiza dados dos meses
+            const updates = {};
             meses.forEach(mes => {
-                localStorage.removeItem(`${categoryName}_${mes.key}`);
+                updates[`/users/${userId}/months/${mes.key}/${newName}`] = 
+                    document.getElementById(`${oldName}_${mes.key}`)?.value || 0;
+                updates[`/users/${userId}/months/${mes.key}/${oldName}`] = null;
             });
-
-            categories = categories.filter(cat => cat !== categoryName);
-            saveCategories();
-
-            row.remove();
-            calculate();
+            await database.ref().update(updates);
         }
 
-        function saveCategories() {
-            localStorage.setItem('categories', JSON.stringify(categories));
-        }
-
-        function loadCategories() {
-            categories.forEach(cat => createCategoryRow(cat));
-        }
-
-        function addRowListeners(row) {
-            row.addEventListener('dragstart', () => draggedRow = row);
-            row.addEventListener('dragover', e => e.preventDefault());
-            row.addEventListener('drop', e => {
-                e.preventDefault();
-                if (draggedRow && draggedRow !== row) {
-                    const rows = Array.from(document.querySelectorAll('#gastosHeader ~ tr:not(#saldoRow)'));
-                    const oldIndex = rows.indexOf(draggedRow);
-                    const newIndex = rows.indexOf(row);
-                    
-                    if (oldIndex < newIndex) {
-                        row.insertAdjacentElement('afterend', draggedRow);
-                    } else {
-                        row.insertAdjacentElement('beforebegin', draggedRow);
-                    }
-                    
-                    updateCategoriesOrder();
-                }
+        function setupRealTimeUpdates() {
+            database.ref(`users/${userId}`).on('value', () => {
+                calculate();
             });
         }
 
-        function updateCategoriesOrder() {
-            categories = Array.from(document.querySelectorAll('#gastosHeader ~ tr:not(#saldoRow)'))
-                .map(row => row.querySelector('.category-name').textContent);
-            saveCategories();
-        }
-
-        function loadSavedData() {
-            document.querySelectorAll('input[type="number"]').forEach(input => {
-                const savedValue = localStorage.getItem(input.id);
-                if (savedValue !== null) {
-                    input.value = savedValue;
-                }
-            });
-        }
-
-        function loadSavedDataForRow(row) {
-            row.querySelectorAll('input').forEach(input => {
-                const savedValue = localStorage.getItem(input.id);
-                if (savedValue !== null) {
-                    input.value = savedValue;
-                }
-            });
-        }
-
-        function addAutoSaveListeners() {
-            document.querySelectorAll('input[type="number"]').forEach(input => {
-                input.addEventListener('input', function() {
-                    localStorage.setItem(this.id, this.value);
-                    calculate();
-                });
-            });
-        }
-
-        function addAutoSaveListenersForRow(row) {
-            row.querySelectorAll('input').forEach(input => {
-                input.addEventListener('input', function() {
-                    localStorage.setItem(this.id, this.value);
-                    calculate();
-                });
-            });
-        }
-
-        function calculate() {
-            let saldoAnterior = 0;
-            const saldos = [];
-
-            meses.forEach(mes => {
-                let totalGastos = 0;
-                document.querySelectorAll('#gastosHeader ~ tr:not(#saldoRow)').forEach(row => {
-                    const input = row.querySelector(`input[data-mes="${mes.key}"]`);
-                    if (input) totalGastos += Number(input.value);
-                });
-
-                const salario = Number(document.getElementById(`salario_${mes.key}`).value);
-                const saldoAtual = saldoAnterior + salario - totalGastos;
+        async function calculate() {
+            try {
+                const snapshot = await database.ref(`users/${userId}/months`).once('value');
+                const monthsData = snapshot.val() || {};
                 
-                document.getElementById(`saldo_${mes.key}`).textContent = formatCurrency(saldoAtual);
-                saldos.push(saldoAtual);
-                saldoAnterior = saldoAtual;
-            });
+                let saldoAnterior = 0;
+                const saldos = [];
 
-            updateChart(saldos);
+                meses.forEach(mes => {
+                    const mesData = monthsData[mes.key] || {};
+                    const salario = Number(mesData.salario) || 0;
+                    let totalGastos = 0;
+
+                    categories.forEach(cat => {
+                        totalGastos += Number(mesData[cat]) || 0;
+                    });
+
+                    const saldoAtual = saldoAnterior + salario - totalGastos;
+                    document.getElementById(`saldo_${mes.key}`).textContent = formatCurrency(saldoAtual);
+                    saldos.push(saldoAtual);
+                    saldoAnterior = saldoAtual;
+                });
+
+                updateChart(saldos);
+            } catch (error) {
+                console.error('Erro ao calcular:', error);
+            }
         }
 
         function updateChart(saldos) {
@@ -486,26 +473,45 @@
             });
         }
 
-        function cleanOldData() {
-            const twoYearsAgo = new Date();
-            twoYearsAgo.setFullYear(twoYearsAgo.getFullYear() - 2);
-            
-            Object.keys(localStorage).forEach(key => {
-                const match = key.match(/(\d{4})-(\d{2})$/);
-                if (match) {
-                    const year = parseInt(match[1]);
-                    const month = parseInt(match[2]) - 1;
-                    const keyDate = new Date(year, month);
+        // Funções auxiliares restantes (manipulação de UI)
+        function toggleActions() {
+            showActions = !showActions;
+            updateActionsVisibility();
+            document.querySelector('.toggle-actions').textContent = 
+                `${showActions ? '▲ Ocultar' : '▼ Mostrar'} Controles`;
+        }
+
+        function updateActionsVisibility() {
+            const rows = document.querySelectorAll('#gastosHeader ~ tr:not(#saldoRow)');
+            rows.forEach(row => {
+                row.classList.toggle('show-actions', showActions);
+                row.draggable = showActions;
+            });
+        }
+
+        function addRowListeners(row) {
+            row.addEventListener('dragstart', () => draggedRow = row);
+            row.addEventListener('dragover', e => e.preventDefault());
+            row.addEventListener('drop', async e => {
+                e.preventDefault();
+                if (draggedRow && draggedRow !== row) {
+                    const rows = Array.from(document.querySelectorAll('#gastosHeader ~ tr:not(#saldoRow)'));
+                    const oldIndex = rows.indexOf(draggedRow);
+                    const newIndex = rows.indexOf(row);
                     
-                    if (keyDate < twoYearsAgo) {
-                        localStorage.removeItem(key);
+                    if (oldIndex < newIndex) {
+                        row.insertAdjacentElement('afterend', draggedRow);
+                    } else {
+                        row.insertAdjacentElement('beforebegin', draggedRow);
                     }
+                    
+                    const newOrder = Array.from(rows).map(r => r.querySelector('.category-name').textContent);
+                    await database.ref(`users/${userId}/categories`).set(newOrder);
                 }
             });
         }
 
         // Inicialização
-        cleanOldData();
         initTable();
     </script>
 </body>
