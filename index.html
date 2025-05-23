@@ -2,10 +2,8 @@
 <html lang="pt-br">
 <head>
     <meta charset="UTF-8">
-    <title>Gestão Financeira Completa</title>
+    <title>Fluxo de Caixa Histórico</title>
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
-    <script src="https://www.gstatic.com/firebasejs/9.6.10/firebase-app-compat.js"></script>
-    <script src="https://www.gstatic.com/firebasejs/9.6.10/firebase-database-compat.js"></script>
     <style>
         body {
             font-family: Arial, sans-serif;
@@ -30,20 +28,27 @@
         }
         th {
             background-color: #f2f2f2;
-            position: sticky;
-            top: 0;
-            z-index: 2;
         }
         th:first-child {
+            position: sticky;
             left: 0;
+            top: 0;
             z-index: 4;
+            background: #f2f2f2;
             min-width: 200px;
+        }
+        th.mes-header {
+            position: sticky;
+            top: 0;
+            z-index: 3;
+            background: #f2f2f2;
         }
         td:first-child {
             position: sticky;
             left: 0;
-            background: white;
             z-index: 1;
+            background: white;
+            min-width: 200px;
         }
         .saldo {
             background-color: #e6ffe6;
@@ -64,7 +69,6 @@
         #chartContainer {
             margin-top: 40px;
             max-width: 800px;
-            height: 400px;
         }
         .category-actions {
             display: inline-block;
@@ -75,6 +79,17 @@
             color: #666;
             margin: 0 5px;
             display: none;
+        }
+        .edit-input {
+            width: 120px;
+            padding: 2px;
+        }
+        .toggle-actions {
+            cursor: pointer;
+            padding: 5px 10px;
+            background: #f0f0f0;
+            border-radius: 4px;
+            margin-left: 10px;
         }
         .show-actions .drag-handle,
         .show-actions .category-actions button {
@@ -87,15 +102,20 @@
             background: none;
             border: none;
         }
+        .period-controls button {
+            padding: 5px 10px;
+            margin: 0 5px;
+            cursor: pointer;
+        }
     </style>
 </head>
 <body>
-    <h1>Gestão Financeira - 3 Anos</h1>
+    <h1>Controle de Fluxo de Caixa - Histórico Completo</h1>
     
     <div class="period-controls">
-        <button onclick="changePeriod(-1)">◄ Período Anterior</button>
+        <button onclick="changePeriod(-1)">◄ Mês Anterior</button>
         <span id="currentPeriod"></span>
-        <button onclick="changePeriod(1)">Próximo Período ►</button>
+        <button onclick="changePeriod(1)">Próximo Mês ►</button>
     </div>
 
     <div class="category-input">
@@ -126,170 +146,316 @@
     </div>
 
     <script>
-        // Configuração do Firebase (SUBSTITUA COM SUAS CREDENCIAIS)
-const firebaseConfig = {
-  apiKey: "AIzaSyCgSkYIvenfEzyjef50OD01Ox9et-nyBMo",
-  authDomain: "fluxo-6d716.firebaseapp.com",
-  databaseURL: "https://fluxo-6d716-default-rtdb.firebaseio.com",
-  projectId: "fluxo-6d716",
-  storageBucket: "fluxo-6d716.firebasestorage.app",
-  messagingSenderId: "761253335013",
-  appId: "1:761253335013:web:44c30372a4749203a3690c"
-};
-
-        const app = firebase.initializeApp(firebaseConfig);
-        const database = firebase.database();
-
         let myChart = null;
         const meses = [];
-        let currentDate = new Date();
-        let categories = [];
+        let currentDate = new Date(localStorage.getItem('currentDate') || new Date());
+        let categories = JSON.parse(localStorage.getItem('categories')) || [];
         let draggedRow = null;
-        let showActions = false;
-        let userId = null;
+        let showActions = localStorage.getItem('showActions') === 'true';
 
-        // 1. Inicialização do Sistema
-        async function initTable() {
-            userId = localStorage.getItem('userId') || generateUserId();
-            localStorage.setItem('userId', userId);
-            
-            await setupFirebaseListeners();
-            generateMonths();
-            buildTableStructure();
-            updateActionsVisibility();
-        }
-
-        // 2. Configuração dos Listeners do Firebase
-        async function setupFirebaseListeners() {
-            // Listener para Categorias
-            database.ref(`users/${userId}/categories`).on('value', snapshot => {
-                categories = snapshot.val() || [];
-                rebuildCategoryRows();
-                calculate();
-            });
-
-            // Listener para Configurações
-            database.ref(`users/${userId}/settings`).on('value', snapshot => {
-                const settings = snapshot.val() || {};
-                showActions = settings.showActions || false;
-                currentDate = new Date(settings.currentDate || new Date());
-                generateMonths();
-                buildTableStructure();
-                updateActionsVisibility();
-            });
-
-            // Listener para Dados Mensais
-            database.ref(`users/${userId}/months`).on('value', () => {
-                loadMonthData().then(calculate);
-            });
-        }
-
-        // 3. Geração dos Meses
         function generateMonths() {
             meses.length = 0;
-            const baseDate = new Date(currentDate);
-            baseDate.setMonth(baseDate.getMonth() - 12); // 12 meses anteriores
+            const startDate = new Date(currentDate);
+            startDate.setMonth(startDate.getMonth() - 12);
 
-            for (let i = 0; i < 36; i++) { // 3 anos de dados
-                const date = new Date(baseDate);
+            for (let i = 0; i < 36; i++) {
+                const date = new Date(startDate);
                 date.setMonth(date.getMonth() + i);
+                const mesKey = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`;
                 meses.push({
-                    key: `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`,
+                    key: mesKey,
                     date: date,
                     name: date.toLocaleString('pt-BR', { month: 'long' }),
                     year: date.getFullYear()
                 });
             }
-            updatePeriodDisplay();
+            
+            const start = meses[0].date;
+            const end = meses[meses.length-1].date;
+            document.getElementById('currentPeriod').textContent = 
+                `Exibindo: ${start.toLocaleDateString('pt-BR', {month: 'long', year: 'numeric'})} - ${end.toLocaleDateString('pt-BR', {month: 'long', year: 'numeric'})}`;
         }
 
-        // 4. Construção da Tabela
-        function buildTableStructure() {
+        function changePeriod(offset) {
+            currentDate.setMonth(currentDate.getMonth() + offset);
+            localStorage.setItem('currentDate', currentDate);
+            initTable();
+        }
+
+        function formatCurrency(value) {
+            return new Intl.NumberFormat('pt-BR', {
+                style: 'currency',
+                currency: 'BRL'
+            }).format(value);
+        }
+
+        function initTable() {
+            generateMonths();
             const headerRow = document.querySelector('#fluxoTable tr:first-child');
             const salarioRow = document.querySelector('#salarioRow');
             const saldoRow = document.querySelector('#saldoRow');
 
-            // Limpar estrutura existente
             headerRow.innerHTML = '<th>Categoria/Mês</th>';
             salarioRow.innerHTML = '<td>Salário</td>';
             saldoRow.innerHTML = '<td class="saldo">Saldo</td>';
 
-            // Adicionar meses
             meses.forEach(mes => {
                 headerRow.innerHTML += `<th class="mes-header">${mes.name}/${mes.year}</th>`;
-                salarioRow.innerHTML += `<td><input type="number" id="salario_${mes.key}" data-mes="${mes.key}" step="100"></td>`;
+                
+                salarioRow.innerHTML += `
+                    <td>
+                        <input type="number" 
+                               id="salario_${mes.key}" 
+                               data-mes="${mes.key}"
+                               step="100"
+                               value="0">
+                    </td>`;
+
                 saldoRow.innerHTML += `<td class="saldo" id="saldo_${mes.key}">${formatCurrency(0)}</td>`;
             });
+
+            loadSavedData();
+            addAutoSaveListeners();
+            loadCategories();
+            calculate();
+            updateActionsVisibility();
+            document.querySelector('.toggle-actions').textContent = 
+                `${showActions ? '▲ Ocultar' : '▼ Mostrar'} Controles`;
         }
 
-        // 5. Carregamento de Dados
-        async function loadMonthData() {
-            return new Promise(resolve => {
-                database.ref(`users/${userId}/months`).once('value', snapshot => {
-                    const monthsData = snapshot.val() || {};
-                    meses.forEach(mes => {
-                        const mesData = monthsData[mes.key] || {};
-                        // Atualizar salários
-                        const salaryInput = document.getElementById(`salario_${mes.key}`);
-                        if (salaryInput) salaryInput.value = mesData.salario || 0;
-                        // Atualizar categorias
-                        categories.forEach(cat => {
-                            const input = document.getElementById(`${cat}_${mes.key}`);
-                            if (input) input.value = mesData[cat] || 0;
-                        });
-                    });
-                    resolve();
-                });
+        function addCategory() {
+            const categoryName = document.getElementById('newCategory').value.trim();
+            if (!categoryName || categories.includes(categoryName)) return;
+
+            categories.push(categoryName);
+            saveCategories();
+            createCategoryRow(categoryName);
+            document.getElementById('newCategory').value = '';
+        }
+
+        function createCategoryRow(categoryName) {
+            const newRow = document.createElement('tr');
+            newRow.draggable = showActions;
+            newRow.classList.toggle('show-actions', showActions);
+            newRow.innerHTML = `
+                <td>
+                    <span class="category-name">${categoryName}</span>
+                    <div class="category-actions">
+                        <span class="drag-handle">↕</span>
+                        <button onclick="editCategory(this)">✏️</button>
+                        <button onclick="deleteCategory(this)">❌</button>
+                    </div>
+                </td>
+            `;
+
+            meses.forEach(mes => {
+                newRow.innerHTML += `
+                    <td>
+                        <input type="number" 
+                               id="${categoryName}_${mes.key}"
+                               data-mes="${mes.key}"
+                               step="100"
+                               value="0">
+                    </td>`;
+            });
+
+            document.querySelector('#gastosHeader').insertAdjacentElement('afterend', newRow);
+            
+            addRowListeners(newRow);
+            loadSavedDataForRow(newRow);
+            addAutoSaveListenersForRow(newRow);
+            calculate();
+        }
+
+        function toggleActions() {
+            showActions = !showActions;
+            localStorage.setItem('showActions', showActions);
+            updateActionsVisibility();
+            document.querySelector('.toggle-actions').textContent = 
+                `${showActions ? '▲ Ocultar' : '▼ Mostrar'} Controles`;
+        }
+
+        function updateActionsVisibility() {
+            const rows = document.querySelectorAll('#gastosHeader ~ tr:not(#saldoRow)');
+            rows.forEach(row => {
+                row.classList.toggle('show-actions', showActions);
+                row.draggable = showActions;
             });
         }
 
-        // 6. Cálculos Financeiros
-        async function calculate() {
-            try {
-                const snapshot = await database.ref(`users/${userId}/months`).once('value');
-                const monthsData = snapshot.val() || {};
+        function editCategory(button) {
+            const row = button.closest('tr');
+            const nameCell = row.querySelector('.category-name');
+            const currentName = nameCell.textContent;
+            
+            const input = document.createElement('input');
+            input.type = 'text';
+            input.value = currentName;
+            input.className = 'edit-input';
+            
+            input.onblur = function() {
+                const newName = this.value.trim();
+                if (newName && newName !== currentName) {
+                    updateCategoryName(currentName, newName);
+                }
+                nameCell.textContent = newName || currentName;
+                input.replaceWith(nameCell);
+            };
+            
+            nameCell.replaceWith(input);
+            input.focus();
+        }
+
+        function updateCategoryName(oldName, newName) {
+            meses.forEach(mes => {
+                const oldKey = `${oldName}_${mes.key}`;
+                const newKey = `${newName}_${mes.key}`;
+                const value = localStorage.getItem(oldKey);
                 
-                let saldoAnterior = 0;
-                const saldos = [];
+                if (value !== null) {
+                    localStorage.setItem(newKey, value);
+                    localStorage.removeItem(oldKey);
+                }
+            });
 
-                meses.forEach(mes => {
-                    const mesData = monthsData[mes.key] || {};
-                    const salario = Number(mesData.salario) || 0;
-                    const gastos = categories.reduce((acc, cat) => acc + Number(mesData[cat] || 0), 0);
-                    const saldo = saldoAnterior + salario - gastos;
-                    
-                    // Atualizar UI
-                    document.getElementById(`saldo_${mes.key}`).textContent = formatCurrency(saldo);
-                    saldos.push(saldo);
-                    saldoAnterior = saldo;
-                });
+            document.querySelectorAll(`input[id^="${oldName}_"]`).forEach(input => {
+                input.id = input.id.replace(oldName, newName);
+            });
 
-                updateChart(saldos);
-            } catch (error) {
-                console.error('Erro nos cálculos:', error);
+            const index = categories.indexOf(oldName);
+            if (index > -1) {
+                categories[index] = newName;
+                saveCategories();
             }
         }
 
-        // 7. Gráfico Interativo
+        function deleteCategory(button) {
+            const row = button.closest('tr');
+            const categoryName = row.querySelector('.category-name').textContent;
+            
+            if (!confirm(`Tem certeza que deseja excluir a categoria "${categoryName}"?`)) return;
+
+            meses.forEach(mes => {
+                localStorage.removeItem(`${categoryName}_${mes.key}`);
+            });
+
+            categories = categories.filter(cat => cat !== categoryName);
+            saveCategories();
+
+            row.remove();
+            calculate();
+        }
+
+        function saveCategories() {
+            localStorage.setItem('categories', JSON.stringify(categories));
+        }
+
+        function loadCategories() {
+            categories.forEach(cat => createCategoryRow(cat));
+        }
+
+        function addRowListeners(row) {
+            row.addEventListener('dragstart', () => draggedRow = row);
+            row.addEventListener('dragover', e => e.preventDefault());
+            row.addEventListener('drop', e => {
+                e.preventDefault();
+                if (draggedRow && draggedRow !== row) {
+                    const rows = Array.from(document.querySelectorAll('#gastosHeader ~ tr:not(#saldoRow)'));
+                    const oldIndex = rows.indexOf(draggedRow);
+                    const newIndex = rows.indexOf(row);
+                    
+                    if (oldIndex < newIndex) {
+                        row.insertAdjacentElement('afterend', draggedRow);
+                    } else {
+                        row.insertAdjacentElement('beforebegin', draggedRow);
+                    }
+                    
+                    updateCategoriesOrder();
+                }
+            });
+        }
+
+        function updateCategoriesOrder() {
+            categories = Array.from(document.querySelectorAll('#gastosHeader ~ tr:not(#saldoRow)'))
+                .map(row => row.querySelector('.category-name').textContent);
+            saveCategories();
+        }
+
+        function loadSavedData() {
+            document.querySelectorAll('input[type="number"]').forEach(input => {
+                const savedValue = localStorage.getItem(input.id);
+                if (savedValue !== null) {
+                    input.value = savedValue;
+                }
+            });
+        }
+
+        function loadSavedDataForRow(row) {
+            row.querySelectorAll('input').forEach(input => {
+                const savedValue = localStorage.getItem(input.id);
+                if (savedValue !== null) {
+                    input.value = savedValue;
+                }
+            });
+        }
+
+        function addAutoSaveListeners() {
+            document.querySelectorAll('input[type="number"]').forEach(input => {
+                input.addEventListener('input', function() {
+                    localStorage.setItem(this.id, this.value);
+                    calculate();
+                });
+            });
+        }
+
+        function addAutoSaveListenersForRow(row) {
+            row.querySelectorAll('input').forEach(input => {
+                input.addEventListener('input', function() {
+                    localStorage.setItem(this.id, this.value);
+                    calculate();
+                });
+            });
+        }
+
+        function calculate() {
+            let saldoAnterior = 0;
+            const saldos = [];
+
+            meses.forEach(mes => {
+                let totalGastos = 0;
+                document.querySelectorAll('#gastosHeader ~ tr:not(#saldoRow)').forEach(row => {
+                    const input = row.querySelector(`input[data-mes="${mes.key}"]`);
+                    if (input) totalGastos += Number(input.value);
+                });
+
+                const salario = Number(document.getElementById(`salario_${mes.key}`).value);
+                const saldoAtual = saldoAnterior + salario - totalGastos;
+                
+                document.getElementById(`saldo_${mes.key}`).textContent = formatCurrency(saldoAtual);
+                saldos.push(saldoAtual);
+                saldoAnterior = saldoAtual;
+            });
+
+            updateChart(saldos);
+        }
+
         function updateChart(saldos) {
             const ctx = document.getElementById('myChart').getContext('2d');
-            
-            // Destruir gráfico anterior
-            if (myChart) myChart.destroy();
-
-            // Configurar dados do gráfico
             const currentMonthIndex = meses.findIndex(m => m.date >= new Date());
             const chartData = saldos.slice(currentMonthIndex, currentMonthIndex + 12);
             const chartLabels = meses.slice(currentMonthIndex, currentMonthIndex + 12)
                 .map(m => `${m.name}/${m.year}`);
 
-            // Criar novo gráfico
+            if (myChart) {
+                myChart.destroy();
+            }
+
             myChart = new Chart(ctx, {
                 type: 'line',
                 data: {
                     labels: chartLabels,
                     datasets: [{
-                        label: 'Projeção de Saldo',
+                        label: 'Projeção do Saldo (12 meses)',
                         data: chartData,
                         borderColor: '#4CAF50',
                         tension: 0.1,
@@ -301,14 +467,18 @@ const firebaseConfig = {
                     plugins: {
                         tooltip: {
                             callbacks: {
-                                label: context => formatCurrency(context.raw)
+                                label: function(context) {
+                                    return formatCurrency(context.raw);
+                                }
                             }
                         }
                     },
                     scales: {
                         y: {
                             ticks: {
-                                callback: value => formatCurrency(value)
+                                callback: function(value) {
+                                    return formatCurrency(value);
+                                }
                             }
                         }
                     }
@@ -316,75 +486,26 @@ const firebaseConfig = {
             });
         }
 
-        // 8. Gestão de Categorias
-        async function addCategory() {
-            const name = document.getElementById('newCategory').value.trim();
-            if (!name || categories.includes(name)) return;
+        function cleanOldData() {
+            const twoYearsAgo = new Date();
+            twoYearsAgo.setFullYear(twoYearsAgo.getFullYear() - 2);
             
-            await database.ref(`users/${userId}/categories`).set([...categories, name]);
-            document.getElementById('newCategory').value = '';
-        }
-
-        async function deleteCategory(button) {
-            const row = button.closest('tr');
-            const name = row.querySelector('.category-name').textContent;
-            if (!confirm(`Excluir "${name}" permanentemente?`)) return;
-            
-            // Atualizar categorias
-            const newCategories = categories.filter(cat => cat !== name);
-            await database.ref(`users/${userId}/categories`).set(newCategories);
-            
-            // Remover dados históricos
-            const updates = {};
-            meses.forEach(mes => {
-                updates[`users/${userId}/months/${mes.key}/${name}`] = null;
-            });
-            await database.ref().update(updates);
-        }
-
-        // 9. Funções Auxiliares
-        function formatCurrency(value) {
-            return new Intl.NumberFormat('pt-BR', { 
-                style: 'currency', 
-                currency: 'BRL' 
-            }).format(value);
-        }
-
-        function generateUserId() {
-            return 'user_' + Math.random().toString(36).substr(2, 9);
-        }
-
-        function updatePeriodDisplay() {
-            const start = meses[0].date;
-            const end = meses[meses.length-1].date;
-            document.getElementById('currentPeriod').textContent = 
-                `Exibindo: ${start.toLocaleDateString('pt-BR', {month: 'long', year: 'numeric'})} - ${end.toLocaleDateString('pt-BR', {month: 'long', year: 'numeric'})}`;
-        }
-
-        function toggleActions() {
-            showActions = !showActions;
-            updateActionsVisibility();
-            saveSettings();
-        }
-
-        function updateActionsVisibility() {
-            const rows = document.querySelectorAll('#gastosHeader ~ tr:not(#saldoRow)');
-            rows.forEach(row => {
-                row.classList.toggle('show-actions', showActions);
-                row.draggable = showActions;
-            });
-            document.querySelector('.toggle-actions').textContent = 
-                `${showActions ? '▲ Ocultar' : '▼ Mostrar'} Controles`;
-        }
-
-        async function saveSettings() {
-            await database.ref(`users/${userId}/settings`).update({
-                showActions,
-                currentDate: currentDate.toISOString()
+            Object.keys(localStorage).forEach(key => {
+                const match = key.match(/(\d{4})-(\d{2})$/);
+                if (match) {
+                    const year = parseInt(match[1]);
+                    const month = parseInt(match[2]) - 1;
+                    const keyDate = new Date(year, month);
+                    
+                    if (keyDate < twoYearsAgo) {
+                        localStorage.removeItem(key);
+                    }
+                }
             });
         }
 
-        // 10. Inicialização
+        // Inicialização
+        cleanOldData();
         initTable();
     </script>
 </body>
