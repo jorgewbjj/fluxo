@@ -7,7 +7,6 @@
     <script src="https://www.gstatic.com/firebasejs/9.6.10/firebase-app-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/9.6.10/firebase-database-compat.js"></script>
     <style>
-        /* Estilos mantidos iguais */
         body {
             font-family: Arial, sans-serif;
             margin: 20px;
@@ -72,6 +71,7 @@
         #chartContainer {
             margin-top: 40px;
             max-width: 800px;
+            height: 400px;
         }
         .category-actions {
             display: inline-block;
@@ -149,17 +149,18 @@
     </div>
 
     <script>
-        // Configuração do Firebase (Substitua com suas credenciais)
-        const firebaseConfig = {
-            apiKey: "SUA_API_KEY",
-            authDomain: "SEU_PROJETO.firebaseapp.com",
-            databaseURL: "https://SEU_PROJETO.firebaseio.com",
-            projectId: "SEU_PROJETO",
-            storageBucket: "SEU_PROJETO.appspot.com",
-            messagingSenderId: "SEU_SENDER_ID",
-            appId: "SEU_APP_ID"
-        };
+        // Configuração do Firebase (substitua com suas credenciais)
+ const firebaseConfig = {
+  apiKey: "AIzaSyCgSkYIvenfEzyjef50OD01Ox9et-nyBMo",
+  authDomain: "fluxo-6d716.firebaseapp.com",
+  databaseURL: "https://fluxo-6d716-default-rtdb.firebaseio.com",
+  projectId: "fluxo-6d716",
+  storageBucket: "fluxo-6d716.firebasestorage.app",
+  messagingSenderId: "761253335013",
+  appId: "1:761253335013:web:44c30372a4749203a3690c"
+};
 
+        // Inicialização do Firebase
         const app = firebase.initializeApp(firebaseConfig);
         const database = firebase.database();
 
@@ -170,6 +171,42 @@
         let draggedRow = null;
         let showActions = false;
         let userId = null;
+
+        async function initTable() {
+            userId = localStorage.getItem('userId') || generateUserId();
+            localStorage.setItem('userId', userId);
+            
+            await setupFirebaseListeners();
+            generateMonths();
+            buildTableStructure();
+            updateActionsVisibility();
+        }
+
+        function generateUserId() {
+            return 'user_' + Math.random().toString(36).substr(2, 9);
+        }
+
+        async function setupFirebaseListeners() {
+            // Listener para categorias
+            database.ref(`users/${userId}/categories`).on('value', (snapshot) => {
+                categories = snapshot.val() || [];
+                rebuildCategoryRows();
+                calculate();
+            });
+
+            // Listener para configurações
+            database.ref(`users/${userId}/settings`).on('value', (snapshot) => {
+                const settings = snapshot.val() || {};
+                showActions = settings.showActions || false;
+                currentDate = new Date(settings.currentDate || new Date());
+                updateActionsVisibility();
+            });
+
+            // Listener principal para dados
+            database.ref(`users/${userId}/months`).on('value', () => {
+                loadMonthData().then(calculate);
+            });
+        }
 
         function generateMonths() {
             meses.length = 0;
@@ -194,49 +231,6 @@
                 `Exibindo: ${start.toLocaleDateString('pt-BR', {month: 'long', year: 'numeric'})} - ${end.toLocaleDateString('pt-BR', {month: 'long', year: 'numeric'})}`;
         }
 
-        function changePeriod(offset) {
-            currentDate.setMonth(currentDate.getMonth() + offset);
-            initTable();
-        }
-
-        function formatCurrency(value) {
-            return new Intl.NumberFormat('pt-BR', {
-                style: 'currency',
-                currency: 'BRL'
-            }).format(value);
-        }
-
-        async function initTable() {
-            userId = localStorage.getItem('userId') || generateUserId();
-            localStorage.setItem('userId', userId);
-            
-            await loadUserData();
-            generateMonths();
-            buildTableStructure();
-            await loadCategories();
-            await loadMonthData();
-            setupRealTimeUpdates();
-            calculate();
-            updateActionsVisibility();
-        }
-
-        function generateUserId() {
-            return 'user_' + Math.random().toString(36).substr(2, 9);
-        }
-
-        async function loadUserData() {
-            try {
-                const snapshot = await database.ref(`users/${userId}`).once('value');
-                const data = snapshot.val() || {};
-                
-                categories = data.categories || [];
-                showActions = data.settings?.showActions || false;
-                currentDate = new Date(data.settings?.currentDate || new Date());
-            } catch (error) {
-                console.error('Erro ao carregar dados:', error);
-            }
-        }
-
         function buildTableStructure() {
             const headerRow = document.querySelector('#fluxoTable tr:first-child');
             const salarioRow = document.querySelector('#salarioRow');
@@ -253,11 +247,22 @@
             });
         }
 
-        async function loadCategories() {
-            const categoriesRef = database.ref(`users/${userId}/categories`);
-            categoriesRef.on('value', (snapshot) => {
-                categories = snapshot.val() || [];
-                rebuildCategoryRows();
+        async function loadMonthData() {
+            return new Promise((resolve) => {
+                database.ref(`users/${userId}/months`).once('value', (snapshot) => {
+                    const monthsData = snapshot.val() || {};
+                    meses.forEach(mes => {
+                        const mesData = monthsData[mes.key] || {};
+                        const salaryInput = document.getElementById(`salario_${mes.key}`);
+                        if (salaryInput) salaryInput.value = mesData.salario || 0;
+                        
+                        categories.forEach(cat => {
+                            const input = document.getElementById(`${cat}_${mes.key}`);
+                            if (input) input.value = mesData[cat] || 0;
+                        });
+                    });
+                    resolve();
+                });
             });
         }
 
@@ -265,13 +270,16 @@
             const existingRows = document.querySelectorAll('#gastosHeader ~ tr:not(#saldoRow)');
             existingRows.forEach(row => row.remove());
             
-            categories.forEach(cat => createCategoryRow(cat));
+            categories.forEach(cat => {
+                const newRow = createCategoryRow(cat);
+                document.querySelector('#gastosHeader').insertAdjacentElement('afterend', newRow);
+                setupInputListeners(newRow);
+                addRowListeners(newRow);
+            });
         }
 
         function createCategoryRow(categoryName) {
             const newRow = document.createElement('tr');
-            newRow.draggable = showActions;
-            newRow.classList.toggle('show-actions', showActions);
             newRow.innerHTML = `
                 <td>
                     <span class="category-name">${categoryName}</span>
@@ -281,40 +289,19 @@
                         <button class="delete-btn">❌</button>
                     </div>
                 </td>
-            `;
-
-            meses.forEach(mes => {
-                newRow.innerHTML += `
+                ${meses.map(mes => `
                     <td>
                         <input type="number" 
                                id="${categoryName}_${mes.key}"
                                data-mes="${mes.key}"
                                step="100">
-                    </td>`;
-            });
+                    </td>
+                `).join('')}
+            `;
 
-            document.querySelector('#gastosHeader').insertAdjacentElement('afterend', newRow);
-            addRowListeners(newRow);
-            setupInputListeners(newRow);
-        }
-
-        async function loadMonthData() {
-            const monthsRef = database.ref(`users/${userId}/months`);
-            monthsRef.on('value', (snapshot) => {
-                const monthsData = snapshot.val() || {};
-                Object.entries(monthsData).forEach(([monthKey, monthData]) => {
-                    // Carrega salário
-                    const salaryInput = document.getElementById(`salario_${monthKey}`);
-                    if (salaryInput) salaryInput.value = monthData.salario || 0;
-                    
-                    // Carrega categorias
-                    categories.forEach(cat => {
-                        const input = document.getElementById(`${cat}_${monthKey}`);
-                        if (input) input.value = monthData[cat] || 0;
-                    });
-                });
-                calculate();
-            });
+            newRow.draggable = showActions;
+            newRow.classList.toggle('show-actions', showActions);
+            return newRow;
         }
 
         function setupInputListeners(row) {
@@ -322,84 +309,15 @@
                 input.addEventListener('input', async function() {
                     const [category, monthKey] = this.id.split('_');
                     await database.ref(`users/${userId}/months/${monthKey}/${category}`).set(Number(this.value));
-                    calculate();
                 });
             });
         }
 
-        async function addCategory() {
-            const categoryName = document.getElementById('newCategory').value.trim();
-            if (!categoryName || categories.includes(categoryName)) return;
-
-            const newCategories = [...categories, categoryName];
-            await database.ref(`users/${userId}/categories`).set(newCategories);
-            document.getElementById('newCategory').value = '';
-        }
-
-        async function deleteCategory(button) {
-            const row = button.closest('tr');
-            const categoryName = row.querySelector('.category-name').textContent;
-            
-            if (!confirm(`Tem certeza que deseja excluir a categoria "${categoryName}"?`)) return;
-
-            const newCategories = categories.filter(cat => cat !== categoryName);
-            await database.ref(`users/${userId}/categories`).set(newCategories);
-            
-            // Remove dados dos meses
-            const updates = {};
-            meses.forEach(mes => {
-                updates[`/users/${userId}/months/${mes.key}/${categoryName}`] = null;
-            });
-            await database.ref().update(updates);
-        }
-
-        async function editCategory(button) {
-            const row = button.closest('tr');
-            const nameCell = row.querySelector('.category-name');
-            const currentName = nameCell.textContent;
-            
-            const input = document.createElement('input');
-            input.type = 'text';
-            input.value = currentName;
-            input.className = 'edit-input';
-            
-            input.onblur = async function() {
-                const newName = this.value.trim();
-                if (newName && newName !== currentName) {
-                    await updateCategoryName(currentName, newName);
-                }
-                nameCell.textContent = newName || currentName;
-                input.replaceWith(nameCell);
-            };
-            
-            nameCell.replaceWith(input);
-            input.focus();
-        }
-
-        async function updateCategoryName(oldName, newName) {
-            // Atualiza categorias
-            const newCategories = categories.map(cat => cat === oldName ? newName : cat);
-            await database.ref(`users/${userId}/categories`).set(newCategories);
-            
-            // Atualiza dados dos meses
-            const updates = {};
-            const snapshot = await database.ref(`users/${userId}/months`).once('value');
-            const monthsData = snapshot.val() || {};
-            
-            Object.keys(monthsData).forEach(monthKey => {
-                if (monthsData[monthKey][oldName]) {
-                    updates[`/users/${userId}/months/${monthKey}/${newName}`] = monthsData[monthKey][oldName];
-                    updates[`/users/${userId}/months/${monthKey}/${oldName}`] = null;
-                }
-            });
-            
-            await database.ref().update(updates);
-        }
-
-        function setupRealTimeUpdates() {
-            database.ref(`users/${userId}`).on('value', () => {
-                calculate();
-            });
+        function formatCurrency(value) {
+            return new Intl.NumberFormat('pt-BR', {
+                style: 'currency',
+                currency: 'BRL'
+            }).format(value);
         }
 
         async function calculate() {
@@ -433,14 +351,12 @@
 
         function updateChart(saldos) {
             const ctx = document.getElementById('myChart').getContext('2d');
+            if (myChart) myChart.destroy();
+
             const currentMonthIndex = meses.findIndex(m => m.date >= new Date());
             const chartData = saldos.slice(currentMonthIndex, currentMonthIndex + 12);
             const chartLabels = meses.slice(currentMonthIndex, currentMonthIndex + 12)
                 .map(m => `${m.name}/${m.year}`);
-
-            if (myChart) {
-                myChart.destroy();
-            }
 
             myChart = new Chart(ctx, {
                 type: 'line',
@@ -450,27 +366,30 @@
                         label: 'Projeção do Saldo (12 meses)',
                         data: chartData,
                         borderColor: '#4CAF50',
+                        borderWidth: 2,
                         tension: 0.1,
                         fill: false
                     }]
                 },
                 options: {
                     responsive: true,
+                    maintainAspectRatio: false,
                     plugins: {
+                        legend: {
+                            display: true,
+                            position: 'top'
+                        },
                         tooltip: {
                             callbacks: {
-                                label: function(context) {
-                                    return formatCurrency(context.raw);
-                                }
+                                label: (context) => formatCurrency(context.raw)
                             }
                         }
                     },
                     scales: {
                         y: {
+                            beginAtZero: false,
                             ticks: {
-                                callback: function(value) {
-                                    return formatCurrency(value);
-                                }
+                                callback: (value) => formatCurrency(value)
                             }
                         }
                     }
@@ -481,8 +400,6 @@
         function toggleActions() {
             showActions = !showActions;
             updateActionsVisibility();
-            document.querySelector('.toggle-actions').textContent = 
-                `${showActions ? '▲ Ocultar' : '▼ Mostrar'} Controles`;
             saveSettings();
         }
 
@@ -492,33 +409,74 @@
                 row.classList.toggle('show-actions', showActions);
                 row.draggable = showActions;
             });
+            document.querySelector('.toggle-actions').textContent = 
+                `${showActions ? '▲ Ocultar' : '▼ Mostrar'} Controles`;
         }
 
-        function addRowListeners(row) {
-            // Eventos de edição e exclusão
-            row.querySelector('.edit-btn').addEventListener('click', (e) => editCategory(e.target));
-            row.querySelector('.delete-btn').addEventListener('click', (e) => deleteCategory(e.target));
+        async function addCategory() {
+            const categoryName = document.getElementById('newCategory').value.trim();
+            if (!categoryName || categories.includes(categoryName)) return;
 
-            // Drag and drop
-            row.addEventListener('dragstart', () => draggedRow = row);
-            row.addEventListener('dragover', e => e.preventDefault());
-            row.addEventListener('drop', async e => {
-                e.preventDefault();
-                if (draggedRow && draggedRow !== row) {
-                    const rows = Array.from(document.querySelectorAll('#gastosHeader ~ tr:not(#saldoRow)'));
-                    const oldIndex = rows.indexOf(draggedRow);
-                    const newIndex = rows.indexOf(row);
-                    
-                    if (oldIndex < newIndex) {
-                        row.insertAdjacentElement('afterend', draggedRow);
-                    } else {
-                        row.insertAdjacentElement('beforebegin', draggedRow);
-                    }
-                    
-                    const newOrder = Array.from(rows).map(r => r.querySelector('.category-name').textContent);
-                    await database.ref(`users/${userId}/categories`).set(newOrder);
+            const newCategories = [...categories, categoryName];
+            await database.ref(`users/${userId}/categories`).set(newCategories);
+            document.getElementById('newCategory').value = '';
+        }
+
+        async function deleteCategory(button) {
+            const row = button.closest('tr');
+            const categoryName = row.querySelector('.category-name').textContent;
+            
+            if (!confirm(`Tem certeza que deseja excluir a categoria "${categoryName}"?`)) return;
+
+            const newCategories = categories.filter(cat => cat !== categoryName);
+            await database.ref(`users/${userId}/categories`).set(newCategories);
+            
+            const updates = {};
+            meses.forEach(mes => {
+                updates[`/users/${userId}/months/${mes.key}/${categoryName}`] = null;
+            });
+            await database.ref().update(updates);
+        }
+
+        async function editCategory(button) {
+            const row = button.closest('tr');
+            const nameCell = row.querySelector('.category-name');
+            const currentName = nameCell.textContent;
+            
+            const input = document.createElement('input');
+            input.type = 'text';
+            input.value = currentName;
+            input.className = 'edit-input';
+            
+            input.onblur = async function() {
+                const newName = this.value.trim();
+                if (newName && newName !== currentName) {
+                    await updateCategoryName(currentName, newName);
+                }
+                nameCell.textContent = newName || currentName;
+                input.replaceWith(nameCell);
+            };
+            
+            nameCell.replaceWith(input);
+            input.focus();
+        }
+
+        async function updateCategoryName(oldName, newName) {
+            const newCategories = categories.map(cat => cat === oldName ? newName : cat);
+            await database.ref(`users/${userId}/categories`).set(newCategories);
+            
+            const snapshot = await database.ref(`users/${userId}/months`).once('value');
+            const monthsData = snapshot.val() || {};
+            const updates = {};
+            
+            Object.keys(monthsData).forEach(monthKey => {
+                if (monthsData[monthKey][oldName]) {
+                    updates[`/users/${userId}/months/${monthKey}/${newName}`] = monthsData[monthKey][oldName];
+                    updates[`/users/${userId}/months/${monthKey}/${oldName}`] = null;
                 }
             });
+            
+            await database.ref().update(updates);
         }
 
         async function saveSettings() {
