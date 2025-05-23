@@ -148,7 +148,7 @@ const firebaseConfig = {
         let showActions = false;
         let userId = null;
 
-        // 1. Inicialização
+        // 1. Inicialização do Sistema
         async function initTable() {
             userId = localStorage.getItem('userId') || generateUserId();
             localStorage.setItem('userId', userId);
@@ -159,14 +159,16 @@ const firebaseConfig = {
             updateActionsVisibility();
         }
 
-        // 2. Configuração Firebase
+        // 2. Configuração dos Listeners do Firebase
         async function setupFirebaseListeners() {
+            // Listener para Categorias
             database.ref(`users/${userId}/categories`).on('value', snapshot => {
                 categories = snapshot.val() || [];
                 rebuildCategoryRows();
                 calculate();
             });
 
+            // Listener para Configurações
             database.ref(`users/${userId}/settings`).on('value', snapshot => {
                 const settings = snapshot.val() || {};
                 showActions = settings.showActions || false;
@@ -176,18 +178,19 @@ const firebaseConfig = {
                 updateActionsVisibility();
             });
 
+            // Listener para Dados Mensais
             database.ref(`users/${userId}/months`).on('value', () => {
                 loadMonthData().then(calculate);
             });
         }
 
-        // 3. Gerenciamento de Meses
+        // 3. Geração dos Meses
         function generateMonths() {
             meses.length = 0;
             const baseDate = new Date(currentDate);
-            baseDate.setMonth(baseDate.getMonth() - 12);
+            baseDate.setMonth(baseDate.getMonth() - 12); // 12 meses anteriores
 
-            for (let i = 0; i < 36; i++) {
+            for (let i = 0; i < 36; i++) { // 3 anos de dados
                 const date = new Date(baseDate);
                 date.setMonth(date.getMonth() + i);
                 meses.push({
@@ -200,7 +203,47 @@ const firebaseConfig = {
             updatePeriodDisplay();
         }
 
-        // 4. Cálculos Financeiros
+        // 4. Construção da Tabela
+        function buildTableStructure() {
+            const headerRow = document.querySelector('#fluxoTable tr:first-child');
+            const salarioRow = document.querySelector('#salarioRow');
+            const saldoRow = document.querySelector('#saldoRow');
+
+            // Limpar estrutura existente
+            headerRow.innerHTML = '<th>Categoria/Mês</th>';
+            salarioRow.innerHTML = '<td>Salário</td>';
+            saldoRow.innerHTML = '<td class="saldo">Saldo</td>';
+
+            // Adicionar meses
+            meses.forEach(mes => {
+                headerRow.innerHTML += `<th class="mes-header">${mes.name}/${mes.year}</th>`;
+                salarioRow.innerHTML += `<td><input type="number" id="salario_${mes.key}" data-mes="${mes.key}" step="100"></td>`;
+                saldoRow.innerHTML += `<td class="saldo" id="saldo_${mes.key}">${formatCurrency(0)}</td>`;
+            });
+        }
+
+        // 5. Carregamento de Dados
+        async function loadMonthData() {
+            return new Promise(resolve => {
+                database.ref(`users/${userId}/months`).once('value', snapshot => {
+                    const monthsData = snapshot.val() || {};
+                    meses.forEach(mes => {
+                        const mesData = monthsData[mes.key] || {};
+                        // Atualizar salários
+                        const salaryInput = document.getElementById(`salario_${mes.key}`);
+                        if (salaryInput) salaryInput.value = mesData.salario || 0;
+                        // Atualizar categorias
+                        categories.forEach(cat => {
+                            const input = document.getElementById(`${cat}_${mes.key}`);
+                            if (input) input.value = mesData[cat] || 0;
+                        });
+                    });
+                    resolve();
+                });
+            });
+        }
+
+        // 6. Cálculos Financeiros
         async function calculate() {
             try {
                 const snapshot = await database.ref(`users/${userId}/months`).once('value');
@@ -215,6 +258,7 @@ const firebaseConfig = {
                     const gastos = categories.reduce((acc, cat) => acc + Number(mesData[cat] || 0), 0);
                     const saldo = saldoAnterior + salario - gastos;
                     
+                    // Atualizar UI
                     document.getElementById(`saldo_${mes.key}`).textContent = formatCurrency(saldo);
                     saldos.push(saldo);
                     saldoAnterior = saldo;
@@ -222,20 +266,24 @@ const firebaseConfig = {
 
                 updateChart(saldos);
             } catch (error) {
-                console.error('Erro ao calcular:', error);
+                console.error('Erro nos cálculos:', error);
             }
         }
 
-        // 5. Gráfico
+        // 7. Gráfico Interativo
         function updateChart(saldos) {
             const ctx = document.getElementById('myChart').getContext('2d');
+            
+            // Destruir gráfico anterior
             if (myChart) myChart.destroy();
 
+            // Configurar dados do gráfico
             const currentMonthIndex = meses.findIndex(m => m.date >= new Date());
             const chartData = saldos.slice(currentMonthIndex, currentMonthIndex + 12);
             const chartLabels = meses.slice(currentMonthIndex, currentMonthIndex + 12)
                 .map(m => `${m.name}/${m.year}`);
 
+            // Criar novo gráfico
             myChart = new Chart(ctx, {
                 type: 'line',
                 data: {
@@ -268,7 +316,7 @@ const firebaseConfig = {
             });
         }
 
-        // 6. Funções de UI
+        // 8. Gestão de Categorias
         async function addCategory() {
             const name = document.getElementById('newCategory').value.trim();
             if (!name || categories.includes(name)) return;
@@ -278,18 +326,23 @@ const firebaseConfig = {
         }
 
         async function deleteCategory(button) {
-            const name = button.closest('tr').querySelector('.category-name').textContent;
-            if (!confirm(`Excluir "${name}"?`)) return;
+            const row = button.closest('tr');
+            const name = row.querySelector('.category-name').textContent;
+            if (!confirm(`Excluir "${name}" permanentemente?`)) return;
             
+            // Atualizar categorias
             const newCategories = categories.filter(cat => cat !== name);
             await database.ref(`users/${userId}/categories`).set(newCategories);
             
+            // Remover dados históricos
             const updates = {};
-            meses.forEach(mes => updates[`users/${userId}/months/${mes.key}/${name}`] = null);
+            meses.forEach(mes => {
+                updates[`users/${userId}/months/${mes.key}/${name}`] = null;
+            });
             await database.ref().update(updates);
         }
 
-        // 7. Utilitários
+        // 9. Funções Auxiliares
         function formatCurrency(value) {
             return new Intl.NumberFormat('pt-BR', { 
                 style: 'currency', 
@@ -301,7 +354,37 @@ const firebaseConfig = {
             return 'user_' + Math.random().toString(36).substr(2, 9);
         }
 
-        // Inicializar
+        function updatePeriodDisplay() {
+            const start = meses[0].date;
+            const end = meses[meses.length-1].date;
+            document.getElementById('currentPeriod').textContent = 
+                `Exibindo: ${start.toLocaleDateString('pt-BR', {month: 'long', year: 'numeric'})} - ${end.toLocaleDateString('pt-BR', {month: 'long', year: 'numeric'})}`;
+        }
+
+        function toggleActions() {
+            showActions = !showActions;
+            updateActionsVisibility();
+            saveSettings();
+        }
+
+        function updateActionsVisibility() {
+            const rows = document.querySelectorAll('#gastosHeader ~ tr:not(#saldoRow)');
+            rows.forEach(row => {
+                row.classList.toggle('show-actions', showActions);
+                row.draggable = showActions;
+            });
+            document.querySelector('.toggle-actions').textContent = 
+                `${showActions ? '▲ Ocultar' : '▼ Mostrar'} Controles`;
+        }
+
+        async function saveSettings() {
+            await database.ref(`users/${userId}/settings`).update({
+                showActions,
+                currentDate: currentDate.toISOString()
+            });
+        }
+
+        // 10. Inicialização
         initTable();
     </script>
 </body>
