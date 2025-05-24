@@ -3,67 +3,102 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Fluxo de Caixa - 24 Meses</title>
+  <title>Fluxo de Caixa Editável</title>
   <script src="https://cdn.tailwindcss.com"></script>
+  <script defer src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
+  <script defer src="https://www.gstatic.com/firebasejs/9.23.0/firebase-database-compat.js"></script>
 </head>
 <body class="bg-gray-50 text-gray-800 font-sans">
-  <div class="max-w-5xl mx-auto p-6">
-    <h1 class="text-3xl font-bold mb-6 text-center">Fluxo de Caixa - Próximos 24 Meses</h1>
-    <div class="overflow-auto shadow-lg rounded-lg">
-      <table class="min-w-full bg-white">
-        <thead>
-          <tr class="bg-gray-200 text-gray-600 uppercase text-sm leading-normal">
-            <th class="py-3 px-6 text-left">Mês</th>
-            <th class="py-3 px-6 text-right">Receita (R$)</th>
-            <th class="py-3 px-6 text-right">Despesa (R$)</th>
-            <th class="py-3 px-6 text-right">Saldo (R$)</th>
+  <div class="max-w-7xl mx-auto p-6">
+    <h1 class="text-3xl font-bold mb-6 text-center">Fluxo de Caixa Editável - 24 Meses</h1>
+    <div class="overflow-auto shadow-lg rounded-lg bg-white">
+      <table class="min-w-full text-sm text-gray-700" id="cashflow-table">
+        <thead class="bg-gray-200 text-gray-600 uppercase text-xs">
+          <tr id="header-row">
+            <th class="py-3 px-4 text-left">Categoria</th>
+            <!-- Meses serão inseridos aqui via JS -->
           </tr>
         </thead>
-        <tbody id="cashflow-body" class="text-gray-700 text-sm font-light">
-          <!-- Conteúdo gerado via JavaScript -->
+        <tbody id="table-body">
+          <!-- Categorias e células serão geradas dinamicamente -->
         </tbody>
       </table>
     </div>
   </div>
 
   <script>
-    const tbody = document.getElementById("cashflow-body");
+    // 🔗 Firebase config (substitua com as suas credenciais)
+const firebaseConfig = {
+  apiKey: "AIzaSyCgSkYIvenfEzyjef50OD01Ox9et-nyBMo",
+  authDomain: "fluxo-6d716.firebaseapp.com",
+  databaseURL: "https://fluxo-6d716-default-rtdb.firebaseio.com",
+  projectId: "fluxo-6d716",
+  storageBucket: "fluxo-6d716.firebasestorage.app",
+  messagingSenderId: "761253335013",
+  appId: "1:761253335013:web:44c30372a4749203a3690c"
+};
 
-    const formatter = new Intl.NumberFormat('pt-BR', {
-      style: 'currency',
-      currency: 'BRL',
-      minimumFractionDigits: 2,
-    });
+    // 🔥 Inicialização do Firebase
+    firebase.initializeApp(firebaseConfig);
+    const db = firebase.database();
 
+    // 📅 Gerar meses
     const monthNames = ["Jan", "Fev", "Mar", "Abr", "Mai", "Jun", "Jul", "Ago", "Set", "Out", "Nov", "Dez"];
-
-    let currentDate = new Date();
+    const months = [];
+    let now = new Date();
 
     for (let i = 0; i < 24; i++) {
-      const month = currentDate.getMonth();
-      const year = currentDate.getFullYear();
-      const monthLabel = `${monthNames[month]}/${year.toString().slice(-2)}`;
-
-      const receita = Math.floor(Math.random() * 10000) + 10000; // 10k - 20k
-      const despesa = Math.floor(Math.random() * 8000) + 7000;   // 7k - 15k
-      const saldo = receita - despesa;
-
-      const saldoClass = saldo >= 0 ? "text-green-600" : "text-red-600";
-
-      const row = `
-        <tr class="border-b border-gray-200 hover:bg-gray-100">
-          <td class="py-3 px-6 text-left">${monthLabel}</td>
-          <td class="py-3 px-6 text-right">${formatter.format(receita)}</td>
-          <td class="py-3 px-6 text-right">${formatter.format(despesa)}</td>
-          <td class="py-3 px-6 text-right ${saldoClass}">${formatter.format(saldo)}</td>
-        </tr>
-      `;
-
-      tbody.innerHTML += row;
-
-      // Avança para o próximo mês
-      currentDate.setMonth(currentDate.getMonth() + 1);
+      const label = `${monthNames[now.getMonth()]}/${now.getFullYear().toString().slice(-2)}`;
+      months.push(label);
+      now.setMonth(now.getMonth() + 1);
     }
+
+    // 🧱 Categorias fixas
+    const categories = ["Receitas", "Despesas", "Saldo"];
+
+    const headerRow = document.getElementById("header-row");
+    const tableBody = document.getElementById("table-body");
+
+    // Criar colunas dos meses
+    months.forEach(month => {
+      const th = document.createElement("th");
+      th.className = "py-3 px-4 text-center";
+      th.innerText = month;
+      headerRow.appendChild(th);
+    });
+
+    // Gerar tabela
+    categories.forEach(category => {
+      const tr = document.createElement("tr");
+      const label = document.createElement("td");
+      label.className = "py-2 px-4 font-medium bg-gray-100";
+      label.innerText = category;
+      tr.appendChild(label);
+
+      months.forEach(month => {
+        const td = document.createElement("td");
+        td.className = "border text-center py-2 px-4 hover:bg-yellow-50";
+        td.contentEditable = true;
+        td.dataset.category = category;
+        td.dataset.month = month;
+
+        // 🔁 Carregar valor do Firebase
+        db.ref(`cashflow/${category}/${month}`).once('value', snapshot => {
+          td.innerText = snapshot.val() || "";
+        });
+
+        // 💾 Salvar no Firebase ao editar
+        td.addEventListener("blur", (e) => {
+          const value = td.innerText.trim();
+          const path = `cashflow/${td.dataset.category}/${td.dataset.month}`;
+          db.ref(path).set(value);
+        });
+
+        tr.appendChild(td);
+      });
+
+      tableBody.appendChild(tr);
+    });
   </script>
 </body>
 </html>
