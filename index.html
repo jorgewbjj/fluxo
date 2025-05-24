@@ -1,23 +1,22 @@
 
-      <!DOCTYPE html>
+
+
+
+<!DOCTYPE html>
 <html lang="pt-br">
 <head>
     <meta charset="UTF-8">
-    <title>Gestão Financeira Corrigida</title>
-    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <title>Teste de Conexão</title>
     <script type="module">
         import { initializeApp } from "https://www.gstatic.com/firebasejs/9.22.2/firebase-app.js";
         import { 
             getDatabase, 
             ref, 
-            push, 
-            onValue, 
-            update, 
-            remove,
-            get 
+            set 
         } from "https://www.gstatic.com/firebasejs/9.22.2/firebase-database.js";
 
- const firebaseConfig = {
+        // Configuração do Firebase (SUBSTITUA COM SEUS DADOS)
+        const firebaseConfig = {
   apiKey: "AIzaSyCgSkYIvenfEzyjef50OD01Ox9et-nyBMo",
   authDomain: "fluxo-6d716.firebaseapp.com",
   databaseURL: "https://fluxo-6d716-default-rtdb.firebaseio.com",
@@ -27,202 +26,35 @@
   appId: "1:761253335013:web:44c30372a4749203a3690c"
 };
 
-
-        const app = initializeApp(firebaseConfig);
-        const database = getDatabase(app);
-        let chartInstance = null;
-
-        const elements = {
-            balanceDiv: document.getElementById('balance'),
-            loading: document.getElementById('loading'),
-            chartContainer: document.getElementById('chartContainer')
-        };
-
-        // Função corrigida para encontrar ou criar transações
-        async function findOrCreateTransaction(categoryId, month) {
+        // Teste de conexão básico
+        async function testarConexao() {
             try {
-                const transactionsRef = ref(database, 'transactions');
-                const snapshot = await get(transactionsRef);
-                const transactions = snapshot.val() || {};
-
-                // Procurar transação existente
-                const existing = Object.entries(transactions).find(([_, t]) => 
-                    t.category === categoryId && t.month === month
-                );
-
-                if (existing) return existing[0];
-
-                // Criar nova transação se não existir
-                const newRef = push(transactionsRef);
-                await update(newRef, {
-                    category: categoryId,
-                    month: month,
-                    amount: 0
-                });
+                const app = initializeApp(firebaseConfig);
+                const database = getDatabase(app);
                 
-                return newRef.key;
-            } catch (error) {
-                console.error('Erro ao criar transação:', error);
-                return null;
-            }
-        }
+                // Escrever dado de teste
+                await set(ref(database, 'teste_conexao'), {
+                    timestamp: Date.now(),
+                    mensagem: "Conexão bem-sucedida!"
+                });
 
-        // Função corrigida para edição de células
-        async function handleCellEdit(categoryId, month, newValue) {
-            try {
-                let amount = 0;
+                // Ler dado de teste
+                console.log("✅ Conexão com Firebase estabelecida!");
+                console.log("Verifique no Firebase Console > Realtime Database");
+                alert("Conexão realizada com sucesso! Verifique o console.");
                 
-                // Converter valor para número
-                if (newValue.trim() !== '') {
-                    const cleanedValue = newValue
-                        .replace(/[^\d,]/g, '')
-                        .replace(',', '.');
-                    
-                    amount = parseFloat(cleanedValue);
-                    
-                    if (isNaN(amount)) {
-                        throw new Error('Valor inválido');
-                    }
-                }
-
-                // Atualizar transação
-                const transactionId = await findOrCreateTransaction(categoryId, month);
-                if (transactionId) {
-                    await update(ref(database, `transactions/${transactionId}`), { 
-                        amount: amount,
-                        category: categoryId,
-                        month: month
-                    });
-                }
-
             } catch (error) {
-                console.error('Erro ao salvar:', error);
-                alert('Digite um valor numérico válido (ex: 1500,50)');
-                // Restaurar valor original
-                const cell = document.querySelector(`[data-category="${categoryId}"][data-month="${month}"]`);
-                if (cell) {
-                    const transaction = await get(ref(database, `transactions/${transactionId}`));
-                    cell.textContent = transaction.exists() 
-                        ? transaction.val().amount.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })
-                        : 'R$ 0,00';
-                }
+                console.error("❌ Erro de conexão:", error);
+                alert("Falha na conexão. Verifique o console (F12)");
             }
         }
 
-        // Função corrigida para renderizar tabela
-        function renderTable(data) {
-            const { categories, transactions, months } = data;
-            const sortedCategories = Object.entries(categories).sort((a, b) => (a[1].order || 0) - (b[1].order || 0));
-            
-            let html = `
-                <div class="table-container">
-                    <table>
-                        <thead>
-                            <tr>
-                                <th class="sticky-col">Categoria</th>
-                                ${months.map(m => `<th>${getMonthName(m)}</th>`).join('')}
-                            </tr>
-                        </thead>
-                        <tbody>`;
-
-            sortedCategories.forEach(([catId, category]) => {
-                html += `
-                    <tr>
-                        <td class="sticky-col" data-category-id="${catId}">
-                            <div class="category-header">
-                                <span>${category.name}</span>
-                                <div>
-                                    <button onclick="handleCategoryEdit('${catId}', '${category.name}', '${category.type}')">✏️</button>
-                                    <button onclick="deleteCategory('${catId}')">🗑️</button>
-                                </div>
-                            </div>
-                        </td>`;
-
-                months.forEach(month => {
-                    const transaction = Object.values(transactions).find(t => t.category === catId && t.month === month);
-                    const value = transaction?.amount || 0;
-                    html += `
-                        <td class="editable-cell" 
-                            data-category="${catId}"
-                            data-month="${month}"
-                            contenteditable="true"
-                        >${value.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}</td>`;
-                });
-
-                html += `</tr>`;
-            });
-
-            html += `
-                    <tr class="totals-row">
-                        <th class="sticky-col">Saldo Acumulado</th>
-                        ${calculateCumulativeTotals(transactions, categories, months)}
-                    </tr>
-                </tbody>
-            </table>
-        </div>`;
-
-            elements.balanceDiv.innerHTML = html;
-
-            // Configurar eventos de edição corrigidos
-            document.querySelectorAll('.editable-cell').forEach(cell => {
-                let originalValue = cell.textContent;
-
-                cell.addEventListener('focus', () => {
-                    originalValue = cell.textContent;
-                    const range = document.createRange();
-                    range.selectNodeContents(cell);
-                    window.getSelection().removeAllRanges().addRange(range);
-                });
-
-                cell.addEventListener('blur', async (e) => {
-                    const newValue = e.target.textContent;
-                    const categoryId = e.target.dataset.category;
-                    const month = e.target.dataset.month;
-                    
-                    if (newValue !== originalValue) {
-                        e.target.classList.add('saving');
-                        await handleCellEdit(categoryId, month, newValue);
-                        e.target.classList.remove('saving');
-                    }
-                });
-
-                // Permitir pressionar Enter para salvar
-                cell.addEventListener('keypress', (e) => {
-                    if (e.key === 'Enter') {
-                        e.preventDefault();
-                        cell.blur();
-                    }
-                });
-            });
-        }
-
-        // Adicionar estilo CSS para feedback visual
-        <style>
-            .editable-cell {
-                transition: background-color 0.3s;
-            }
-            
-            .editable-cell:focus {
-                background-color: #fff9e6;
-                outline: 2px solid #ffd700;
-            }
-            
-            .saving {
-                background-color: #e8f5e9 !important;
-            }
-            
-            .saving::after {
-                content: 'Salvando...';
-                position: absolute;
-                font-size: 0.8em;
-                color: #666;
-            }
-        </style>
-
-        // Restante do código mantido igual...
+        // Executar teste ao carregar
+        window.addEventListener('load', testarConexao);
     </script>
 </head>
 <body>
-    <!-- Estrutura HTML mantida igual -->
+    <h1>Teste de Conexão Firebase</h1>
+    <p>Abra o console do navegador (F12) para ver os resultados</p>
 </body>
 </html>
