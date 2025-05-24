@@ -1,8 +1,8 @@
-<!DOCTYPE html>
+      <!DOCTYPE html>
 <html lang="pt-br">
 <head>
     <meta charset="UTF-8">
-    <title>Controle Financeiro Completo</title>
+    <title>Fluxo de Caixa 24 Meses</title>
     <script type="module">
         import { initializeApp } from "https://www.gstatic.com/firebasejs/9.22.2/firebase-app.js";
         import { 
@@ -12,11 +12,10 @@
             onValue, 
             update, 
             remove,
-            set,
             get 
         } from "https://www.gstatic.com/firebasejs/9.22.2/firebase-database.js";
 
-        // Configuração do Firebase (substitua pelos seus dados)
+        // Configuração do Firebase (substitua com seus dados)
 const firebaseConfig = {
   apiKey: "AIzaSyCgSkYIvenfEzyjef50OD01Ox9et-nyBMo",
   authDomain: "fluxo-6d716.firebaseapp.com",
@@ -26,6 +25,7 @@ const firebaseConfig = {
   messagingSenderId: "761253335013",
   appId: "1:761253335013:web:44c30372a4749203a3690c"
 };
+
         const app = initializeApp(firebaseConfig);
         const database = getDatabase(app);
 
@@ -41,22 +41,18 @@ const firebaseConfig = {
             loading: document.getElementById('loading')
         };
 
-        // Inicialização
-        window.addEventListener('DOMContentLoaded', () => {
-            initApp();
-        });
-
-        async function initApp() {
-            try {
-                elements.loading.style.display = 'block';
-                await loadCategories();
-                await setupRealTimeUpdates();
-                elements.loading.style.display = 'none';
-            } catch (error) {
-                console.error('Erro na inicialização:', error);
-                elements.loading.style.display = 'none';
-                alert('Erro ao carregar o aplicativo!');
+        // Gerar 24 meses a partir do atual
+        function generateMonths() {
+            const months = [];
+            const today = new Date();
+            today.setDate(1); // Garantir que estamos no primeiro dia do mês
+            for(let i = 0; i < 24; i++) {
+                const date = new Date(today.getFullYear(), today.getMonth() + i, 1);
+                const year = date.getFullYear();
+                const month = String(date.getMonth() + 1).padStart(2, '0');
+                months.push(`${year}-${month}`);
             }
+            return months;
         }
 
         // Carregar categorias
@@ -66,6 +62,7 @@ const firebaseConfig = {
                 const categories = snapshot.val() || {};
                 populateCategories(categories);
                 populateCategorySelect(categories);
+                return categories;
             } catch (error) {
                 console.error('Erro ao carregar categorias:', error);
                 throw error;
@@ -73,7 +70,7 @@ const firebaseConfig = {
         }
 
         function populateCategories(categories) {
-            elements.categoriesList.innerHTML = '<h3>Categorias Existentes</h3>';
+            elements.categoriesList.innerHTML = '<h3>Categorias Cadastradas</h3>';
             for (const [key, category] of Object.entries(categories)) {
                 elements.categoriesList.innerHTML += `
                     <div class="category-item">
@@ -179,99 +176,91 @@ const firebaseConfig = {
             return true;
         }
 
-        // Atualizações em Tempo Real
-        async function setupRealTimeUpdates() {
-            onValue(ref(database, 'categories'), (snapshot) => {
-                const categories = snapshot.val() || {};
-                populateCategories(categories);
-                populateCategorySelect(categories);
-            });
+        // Processamento de Dados
+        async function processFinancialData() {
+            try {
+                const [transactionsSnapshot, categoriesSnapshot] = await Promise.all([
+                    get(ref(database, 'transactions')),
+                    get(ref(database, 'categories'))
+                ]);
+                
+                const transactions = transactionsSnapshot.val() || {};
+                const categories = categoriesSnapshot.val() || {};
+                const months = generateMonths();
 
-            onValue(ref(database, 'transactions'), async (snapshot) => {
-                try {
-                    const transactions = snapshot.val() || {};
-                    const categories = await getCategories();
-                    const { balanceData, months } = processData(transactions, categories);
-                    renderBalanceTable(balanceData, months, categories);
-                } catch (error) {
-                    console.error('Erro ao processar transações:', error);
-                }
-            });
+                const balanceData = initializeBalanceData(categories, months);
+                populateBalanceData(balanceData, transactions, categories, months);
+
+                return { balanceData, months };
+            } catch (error) {
+                console.error('Erro ao processar dados:', error);
+                throw error;
+            }
         }
 
-        // Processamento de Dados
-        function processData(transactions, categories) {
+        function initializeBalanceData(categories, months) {
             const balanceData = {};
-            const months = new Set();
-
-            // Inicializar estrutura
             Object.entries(categories).forEach(([catId, cat]) => {
                 balanceData[catId] = {
                     name: cat.name,
                     type: cat.type,
-                    total: 0,
-                    months: {}
+                    months: Object.fromEntries(months.map(m => [m, 0])),
+                    total: 0
                 };
             });
+            return balanceData;
+        }
 
-            // Processar transações
+        function populateBalanceData(balanceData, transactions, categories, months) {
             Object.values(transactions).forEach(transaction => {
                 const catId = transaction.category;
-                const month = transaction.month;
-                const amount = categories[catId]?.type === 'income' ? transaction.amount : -transaction.amount;
+                if (!balanceData[catId] || !months.includes(transaction.month)) return;
 
-                if (balanceData[catId]) {
-                    balanceData[catId].total += amount;
-                    balanceData[catId].months[month] = (balanceData[catId].months[month] || 0) + amount;
-                    months.add(month);
-                }
+                const amount = categories[catId].type === 'income' 
+                    ? transaction.amount 
+                    : -transaction.amount;
+
+                balanceData[catId].months[transaction.month] += amount;
+                balanceData[catId].total += amount;
             });
-
-            return {
-                balanceData,
-                months: Array.from(months).sort()
-            };
         }
 
         // Renderização da Tabela
-        function renderBalanceTable(balanceData, months, categories) {
+        function renderCashFlowTable(balanceData, months) {
             let html = `
                 <div class="table-header">
-                    <h3>Resumo Financeiro</h3>
-                    <small>${new Date().toLocaleDateString()}</small>
+                    <h3>Projeção de Fluxo de Caixa (24 Meses)</h3>
+                    <small>Atualizado em: ${new Date().toLocaleDateString()}</small>
                 </div>
                 <div class="table-container">
                     <table>
                         <thead>
                             <tr>
-                                <th>Categoria</th>
-                                ${months.map(m => `<th>${m}</th>`).join('')}
-                                <th>Total</th>
+                                <th class="sticky-header">Categoria</th>
+                                ${months.map(m => `
+                                    <th class="month-header">
+                                        ${formatMonth(m)}
+                                    </th>
+                                `).join('')}
+                                <th class="sticky-header">Total</th>
                             </tr>
                         </thead>
                         <tbody>
             `;
 
             // Linhas das categorias
-            Object.entries(balanceData).forEach(([catId, data]) => {
+            Object.values(balanceData).forEach(data => {
                 html += `
                     <tr>
-                        <td class="category-name ${data.type}">
+                        <td class="category-cell ${data.type}">
                             ${data.name}
                             <span class="type-badge">${data.type === 'income' ? 'Receita' : 'Despesa'}</span>
                         </td>
-                `;
-
-                months.forEach(month => {
-                    const value = data.months[month] || 0;
-                    html += `
-                        <td class="value-cell ${value >= 0 ? 'positive' : 'negative'}">
-                            ${formatCurrency(value)}
-                        </td>
-                    `;
-                });
-
-                html += `
+                        ${months.map(month => `
+                            <td class="value-cell ${data.months[month] >= 0 ? 'positive' : 'negative'}">
+                                ${formatCurrency(data.months[month])}
+                            </td>
+                        `).join('')}
                         <td class="total-cell ${data.total >= 0 ? 'positive' : 'negative'}">
                             ${formatCurrency(data.total)}
                         </td>
@@ -282,16 +271,16 @@ const firebaseConfig = {
             // Linha de totais
             html += `
                     <tr class="totals-row">
-                        <th>Total Mensal</th>
+                        <th class="sticky-header">Total Mensal</th>
                         ${months.map(month => {
-                            const total = Object.values(balanceData).reduce((sum, cat) => sum + (cat.months[month] || 0), 0);
+                            const total = Object.values(balanceData).reduce((sum, cat) => sum + cat.months[month], 0);
                             return `
                                 <td class="total-cell ${total >= 0 ? 'positive' : 'negative'}">
                                     ${formatCurrency(total)}
                                 </td>
                             `;
                         }).join('')}
-                        <td class="grand-total ${Object.values(balanceData).reduce((sum, cat) => sum + cat.total, 0) >= 0 ? 'positive' : 'negative'}">
+                        <td class="grand-total">
                             ${formatCurrency(Object.values(balanceData).reduce((sum, cat) => sum + cat.total, 0))}
                         </td>
                     </tr>
@@ -303,18 +292,36 @@ const firebaseConfig = {
         }
 
         // Funções auxiliares
-        async function getCategories() {
-            const snapshot = await get(ref(database, 'categories'));
-            return snapshot.val() || {};
+        function formatMonth(monthString) {
+            const [year, month] = monthString.split('-');
+            return `${month}/${year.substring(2)}`;
         }
 
         function formatCurrency(value) {
             return new Intl.NumberFormat('pt-BR', {
                 style: 'currency',
                 currency: 'BRL'
-            }).format(Math.abs(value));
+            }).format(value);
         }
 
+        // Inicialização
+        window.addEventListener('DOMContentLoaded', async () => {
+            try {
+                elements.loading.style.display = 'block';
+                await loadCategories();
+                
+                onValue(ref(database, 'transactions'), async () => {
+                    const { balanceData, months } = await processFinancialData();
+                    renderCashFlowTable(balanceData, months);
+                });
+
+                elements.loading.style.display = 'none';
+            } catch (error) {
+                console.error('Erro na inicialização:', error);
+                elements.loading.style.display = 'none';
+                alert('Erro ao carregar dados!');
+            }
+        });
     </script>
     <style>
         :root {
@@ -331,7 +338,7 @@ const firebaseConfig = {
         }
 
         .container {
-            max-width: 1200px;
+            max-width: 100%;
             margin: 0 auto;
             background: white;
             padding: 30px;
@@ -366,18 +373,41 @@ const firebaseConfig = {
             transform: translateY(-1px);
         }
 
-        .category-item {
-            display: flex;
-            align-items: center;
-            padding: 12px;
-            margin: 8px 0;
-            background: #f8f9fa;
-            border-radius: 6px;
+        .table-container {
+            overflow-x: auto;
+            max-height: 80vh;
         }
 
-        .category-name {
-            flex-grow: 1;
-            margin: 0 15px;
+        table {
+            min-width: 1200px;
+            border-collapse: collapse;
+        }
+
+        th, td {
+            padding: 12px;
+            text-align: center;
+            border-bottom: 1px solid #eee;
+        }
+
+        .sticky-header {
+            position: sticky;
+            left: 0;
+            background: white;
+            z-index: 2;
+            box-shadow: 2px 0 5px rgba(0,0,0,0.1);
+        }
+
+        .month-header {
+            writing-mode: vertical-rl;
+            transform: rotate(180deg);
+            min-width: 40px;
+            vertical-align: bottom;
+            padding: 10px 5px !important;
+        }
+
+        .category-cell {
+            text-align: left;
+            white-space: nowrap;
         }
 
         .type-badge {
@@ -397,42 +427,17 @@ const firebaseConfig = {
             color: white;
         }
 
-        .table-container {
-            overflow-x: auto;
-            margin-top: 20px;
+        .value-cell, .total-cell {
+            min-width: 100px;
+            font-family: monospace;
         }
 
-        table {
-            width: 100%;
-            border-collapse: collapse;
-            min-width: 800px;
-        }
+        .positive { color: var(--income-color); }
+        .negative { color: var(--expense-color); }
 
-        th, td {
-            padding: 12px;
-            text-align: center;
-            border-bottom: 1px solid #eee;
-        }
-
-        th {
-            background: var(--primary-color);
-            color: white;
-        }
-
-        .value-cell {
-            font-weight: 500;
-        }
-
-        .positive {
-            color: var(--income-color);
-        }
-
-        .negative {
-            color: var(--expense-color);
-        }
-
-        .totals-row th {
-            background: #34495e;
+        .totals-row {
+            background: #f8f9fa;
+            font-weight: bold;
         }
 
         #loading {
@@ -441,11 +446,12 @@ const firebaseConfig = {
             left: 0;
             right: 0;
             bottom: 0;
-            background: rgba(255,255,255,0.8);
+            background: rgba(255,255,255,0.9);
             display: none;
             justify-content: center;
             align-items: center;
             font-size: 24px;
+            z-index: 1000;
         }
 
         @media (max-width: 768px) {
@@ -470,25 +476,25 @@ const firebaseConfig = {
     <div class="container">
         <div class="section">
             <h2>📁 Gerenciar Categorias</h2>
-            <input type="text" id="categoryName" placeholder="Nova categoria (ex: Salário)">
+            <input type="text" id="categoryName" placeholder="Nova categoria">
             <select id="categoryType">
                 <option value="income">Receita</option>
                 <option value="expense">Despesa</option>
             </select>
-            <button onclick="addCategory()">➕ Adicionar Categoria</button>
+            <button onclick="addCategory()">➕ Adicionar</button>
             <div id="categoriesList"></div>
         </div>
 
         <div class="section">
             <h2>💸 Nova Transação</h2>
             <select id="transactionCategory"></select>
-            <input type="number" id="transactionAmount" placeholder="Valor (R$)" step="0.01">
+            <input type="number" id="transactionAmount" placeholder="Valor" step="0.01">
             <input type="month" id="transactionMonth">
-            <button onclick="addTransaction()">💾 Salvar Transação</button>
+            <button onclick="addTransaction()">💾 Salvar</button>
         </div>
 
         <div class="section">
-            <h2>📊 Resumo Financeiro</h2>
+            <h2>📊 Fluxo de Caixa (24 Meses)</h2>
             <div id="balance"></div>
         </div>
     </div>
