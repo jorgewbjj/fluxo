@@ -2,574 +2,176 @@
 <html lang="pt-br">
 <head>
     <meta charset="UTF-8">
-    <title>Fluxo de Caixa Histórico</title>
-    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
-    <script src="https://www.gstatic.com/firebasejs/9.6.10/firebase-app-compat.js"></script>
-    <script src="https://www.gstatic.com/firebasejs/9.6.10/firebase-firestore-compat.js"></script>
+    <title>Controle Financeiro</title>
+    <script src="https://www.gstatic.com/firebasejs/8.10.0/firebase-app.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/8.10.0/firebase-database.js"></script>
     <style>
-        body {
-            font-family: Arial, sans-serif;
-            margin: 20px;
-            overflow-x: hidden;
-        }
-        .table-container {
-            overflow-x: auto;
-            max-width: 100%;
-            margin-top: 20px;
-            max-height: 80vh;
-        }
-        table {
-            border-collapse: collapse;
-            min-width: 1400px;
-        }
-        th, td {
-            border: 1px solid #ddd;
-            padding: 8px;
-            text-align: center;
-            min-width: 120px;
-        }
-        th {
-            background-color: #f2f2f2;
-        }
-        th:first-child {
-            position: sticky;
-            left: 0;
-            top: 0;
-            z-index: 4;
-            background: #f2f2f2;
-            min-width: 200px;
-        }
-        th.mes-header {
-            position: sticky;
-            top: 0;
-            z-index: 3;
-            background: #f2f2f2;
-        }
-        td:first-child {
-            position: sticky;
-            left: 0;
-            z-index: 1;
-            background: white;
-            min-width: 200px;
-        }
-        .saldo {
-            background-color: #e6ffe6;
-        }
-        input {
-            width: 100px;
-            text-align: right;
-            padding: 4px;
-        }
-        .category-input, .period-controls {
-            margin: 10px 0;
-            position: sticky;
-            left: 0;
-            background: white;
-            z-index: 5;
-            padding: 10px 0;
-        }
-        #chartContainer {
-            margin-top: 40px;
-            max-width: 800px;
-        }
-        .category-actions {
-            display: inline-block;
-            margin-left: 10px;
-        }
-        .drag-handle {
-            cursor: move;
-            color: #666;
-            margin: 0 5px;
-            display: none;
-        }
-        .edit-input {
-            width: 120px;
-            padding: 2px;
-        }
-        .toggle-actions {
-            cursor: pointer;
-            padding: 5px 10px;
-            background: #f0f0f0;
-            border-radius: 4px;
-            margin-left: 10px;
-        }
-        .show-actions .drag-handle,
-        .show-actions .category-actions button {
-            display: inline-block;
-        }
-        .category-actions button {
-            display: none;
-            margin-left: 5px;
-            cursor: pointer;
-            background: none;
-            border: none;
-        }
-        .period-controls button {
-            padding: 5px 10px;
-            margin: 0 5px;
-            cursor: pointer;
-        }
+        body { font-family: Arial, sans-serif; margin: 20px; }
+        .container { max-width: 800px; margin: 0 auto; }
+        .section { margin-bottom: 30px; border: 1px solid #ccc; padding: 20px; border-radius: 5px; }
+        input, select, button { margin: 5px; padding: 8px; }
+        table { width: 100%; border-collapse: collapse; margin-top: 10px; }
+        th, td { border: 1px solid #ddd; padding: 8px; text-align: left; }
     </style>
 </head>
 <body>
-    <h1>Controle de Fluxo de Caixa - Histórico Completo</h1>
-    
-    <div class="period-controls">
-        <button onclick="changePeriod(-1)">◄ Mês Anterior</button>
-        <span id="currentPeriod"></span>
-        <button onclick="changePeriod(1)">Próximo Mês ►</button>
-    </div>
+    <div class="container">
+        <div class="section">
+            <h2>Gerenciar Categorias</h2>
+            <input type="text" id="categoryName" placeholder="Nova categoria">
+            <select id="categoryType">
+                <option value="income">Receita</option>
+                <option value="expense">Despesa</option>
+            </select>
+            <button onclick="addCategory()">Adicionar Categoria</button>
+            <div id="categoriesList"></div>
+        </div>
 
-    <div class="category-input">
-        <input type="text" id="newCategory" placeholder="Nova categoria">
-        <button onclick="addCategory()">Adicionar Categoria</button>
-        <span class="toggle-actions" onclick="toggleActions()">▼ Mostrar Controles</span>
-    </div>
+        <div class="section">
+            <h2>Adicionar Transação</h2>
+            <select id="transactionCategory"></select>
+            <input type="number" id="transactionAmount" placeholder="Valor">
+            <input type="month" id="transactionMonth">
+            <button onclick="addTransaction()">Adicionar</button>
+        </div>
 
-    <div class="table-container">
-        <table id="fluxoTable">
-            <tr>
-                <th>Categoria/Mês</th>
-            </tr>
-            <tr id="salarioRow">
-                <td>Salário</td>
-            </tr>
-            <tr id="gastosHeader">
-                <td>Gastos</td>
-            </tr>
-            <tr id="saldoRow">
-                <td class="saldo">Saldo</td>
-            </tr>
-        </table>
-    </div>
-
-    <div id="chartContainer">
-        <canvas id="myChart"></canvas>
+        <div class="section">
+            <h2>Saldo Mensal</h2>
+            <div id="balance"></div>
+        </div>
     </div>
 
     <script>
-        // Configuração do Firebase (Substitua com suas credenciais)
-const firebaseConfig = {
-  apiKey: "AIzaSyCgSkYIvenfEzyjef50OD01Ox9et-nyBMo",
-  authDomain: "fluxo-6d716.firebaseapp.com",
-  databaseURL: "https://fluxo-6d716-default-rtdb.firebaseio.com",
-  projectId: "fluxo-6d716",
-  storageBucket: "fluxo-6d716.firebasestorage.app",
-  messagingSenderId: "761253335013",
-  appId: "1:761253335013:web:44c30372a4749203a3690c"
-};
+        // Configuração do Firebase
+        const firebaseConfig = {
+            apiKey: "SUA_API_KEY",
+            authDomain: "SEU_PROJETO.firebaseapp.com",
+            databaseURL: "https://SEU_PROJETO.firebaseio.com",
+            projectId: "SEU_PROJETO",
+            storageBucket: "SEU_PROJETO.appspot.com",
+            messagingSenderId: "SEU_SENDER_ID",
+            appId: "SEU_APP_ID"
+        };
 
-        // Inicializar Firebase
         firebase.initializeApp(firebaseConfig);
-        const db = firebase.firestore();
+        const database = firebase.database();
 
-        let myChart = null;
-        const meses = [];
-        let currentDate = new Date();
-        let categories = [];
-        let draggedRow = null;
-        let showActions = false;
-
-        function formatCurrency(value) {
-            return new Intl.NumberFormat('pt-BR', {
-                style: 'currency',
-                currency: 'BRL'
-            }).format(value);
-        }
-
-        async function saveMonthData(mesKey, data) {
-            try {
-                await db.collection('months').doc(mesKey).set(data, { merge: true });
-            } catch (error) {
-                console.error('Erro ao salvar mês:', error);
-            }
-        }
-
-        async function loadMonthData(mesKey) {
-            try {
-                const doc = await db.collection('months').doc(mesKey).get();
-                return doc.exists ? doc.data() : { salario: 0, categorias: {} };
-            } catch (error) {
-                console.error('Erro ao carregar mês:', error);
-                return { salario: 0, categorias: {} };
-            }
-        }
-
-        async function updateCategoriesInFirestore(oldName, newName) {
-            const batch = db.batch();
-            const monthsRef = db.collection('months');
-            
-            const snapshot = await monthsRef.get();
-            snapshot.forEach(doc => {
-                const data = doc.data();
-                if (data.categorias[oldName] !== undefined) {
-                    batch.update(doc.ref, {
-                        [`categorias.${newName}`]: data.categorias[oldName],
-                        [`categorias.${oldName}`]: firebase.firestore.FieldValue.delete()
-                    });
-                }
-            });
-            
-            await batch.commit();
-        }
-
-        function generateMonths() {
-            meses.length = 0;
-            const startDate = new Date(currentDate);
-            startDate.setMonth(startDate.getMonth() - 12);
-
-            for (let i = 0; i < 36; i++) {
-                const date = new Date(startDate);
-                date.setMonth(date.getMonth() + i);
-                const mesKey = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`;
-                meses.push({
-                    key: mesKey,
-                    date: date,
-                    name: date.toLocaleString('pt-BR', { month: 'long' }),
-                    year: date.getFullYear()
-                });
-            }
-            
-            const start = meses[0].date;
-            const end = meses[meses.length-1].date;
-            document.getElementById('currentPeriod').textContent = 
-                `Exibindo: ${start.toLocaleDateString('pt-BR', {month: 'long', year: 'numeric'})} - ${end.toLocaleDateString('pt-BR', {month: 'long', year: 'numeric'})}`;
-        }
-
-        function changePeriod(offset) {
-            currentDate.setMonth(currentDate.getMonth() + offset);
-            initTable();
-        }
-
-        async function initTable() {
-            generateMonths();
-            const headerRow = document.querySelector('#fluxoTable tr:first-child');
-            const salarioRow = document.querySelector('#salarioRow');
-            const saldoRow = document.querySelector('#saldoRow');
-
-            headerRow.innerHTML = '<th>Categoria/Mês</th>';
-            salarioRow.innerHTML = '<td>Salário</td>';
-            saldoRow.innerHTML = '<td class="saldo">Saldo</td>';
-
-            // Carregar categorias do Firestore
-            const categoriesSnapshot = await db.collection('categories').get();
-            categories = categoriesSnapshot.docs.map(doc => doc.id);
-
-            for (const mes of meses) {
-                headerRow.innerHTML += `<th class="mes-header">${mes.name}/${mes.year}</th>`;
+        // Carregar categorias
+        function loadCategories() {
+            const categoriesRef = database.ref('categories');
+            categoriesRef.on('value', (snapshot) => {
+                const categories = snapshot.val() || {};
+                const select = document.getElementById('transactionCategory');
+                select.innerHTML = '';
                 
-                // Carregar dados do mês
-                const monthData = await loadMonthData(mes.key);
-                
-                salarioRow.innerHTML += `
-                    <td>
-                        <input type="number" 
-                               id="salario_${mes.key}" 
-                               data-mes="${mes.key}"
-                               step="100"
-                               value="${monthData.salario || 0}">
-                    </td>`;
-
-                saldoRow.innerHTML += `<td class="saldo" id="saldo_${mes.key}">${formatCurrency(0)}</td>`;
-            }
-
-            // Criar linhas de categorias
-            categories.forEach(cat => createCategoryRow(cat));
-            
-            addAutoSaveListeners();
-            calculate();
-            setupRealtimeUpdates();
-            updateActionsVisibility();
-        }
-
-        function setupRealtimeUpdates() {
-            db.collection('months').onSnapshot(snapshot => {
-                snapshot.docChanges().forEach(change => {
-                    if (change.type === 'modified') {
-                        updateMonthUI(change.doc.id, change.doc.data());
-                    }
-                });
-            });
-        }
-
-        function updateMonthUI(mesKey, data) {
-            // Atualizar salário
-            const salarioInput = document.getElementById(`salario_${mesKey}`);
-            if (salarioInput && salarioInput.value !== data.salario.toString()) {
-                salarioInput.value = data.salario;
-            }
-
-            // Atualizar categorias
-            Object.entries(data.categorias || {}).forEach(([category, value]) => {
-                const input = document.getElementById(`${category}_${mesKey}`);
-                if (input && input.value !== value.toString()) {
-                    input.value = value;
-                }
-            });
-
-            // Atualizar saldo
-            const saldoCell = document.getElementById(`saldo_${mesKey}`);
-            if (saldoCell) {
-                saldoCell.textContent = formatCurrency(data.saldo || 0);
-            }
-        }
-
-        async function addCategory() {
-            const categoryName = document.getElementById('newCategory').value.trim();
-            if (!categoryName || categories.includes(categoryName)) return;
-
-            try {
-                // Adicionar categoria no Firestore
-                await db.collection('categories').doc(categoryName).set({});
-                categories.push(categoryName);
-                createCategoryRow(categoryName);
-
-                // Adicionar categoria em todos os meses
-                const batch = db.batch();
-                meses.forEach(mes => {
-                    const ref = db.collection('months').doc(mes.key);
-                    batch.update(ref, {
-                        [`categorias.${categoryName}`]: 0
-                    });
-                });
-                await batch.commit();
-
-                document.getElementById('newCategory').value = '';
-            } catch (error) {
-                console.error('Erro ao adicionar categoria:', error);
-            }
-        }
-
-        function createCategoryRow(categoryName) {
-            const newRow = document.createElement('tr');
-            newRow.draggable = showActions;
-            newRow.classList.toggle('show-actions', showActions);
-            newRow.innerHTML = `
-                <td>
-                    <span class="category-name">${categoryName}</span>
-                    <div class="category-actions">
-                        <span class="drag-handle">↕</span>
-                        <button onclick="editCategory(this)">✏️</button>
-                        <button onclick="deleteCategory(this)">❌</button>
-                    </div>
-                </td>
-            `;
-
-            meses.forEach(async mes => {
-                const monthData = await loadMonthData(mes.key);
-                newRow.innerHTML += `
-                    <td>
-                        <input type="number" 
-                               id="${categoryName}_${mes.key}"
-                               data-mes="${mes.key}"
-                               step="100"
-                               value="${monthData.categorias[categoryName] || 0}">
-                    </td>`;
-            });
-
-            document.querySelector('#gastosHeader').insertAdjacentElement('afterend', newRow);
-            addRowListeners(newRow);
-            addAutoSaveListenersForRow(newRow);
-        }
-
-        async function deleteCategory(button) {
-            const row = button.closest('tr');
-            const categoryName = row.querySelector('.category-name').textContent;
-            
-            if (!confirm(`Tem certeza que deseja excluir a categoria "${categoryName}"?`)) return;
-
-            try {
-                // Remover categoria do Firestore
-                await db.collection('categories').doc(categoryName).delete();
-                
-                // Remover de todos os meses
-                const batch = db.batch();
-                meses.forEach(mes => {
-                    const ref = db.collection('months').doc(mes.key);
-                    batch.update(ref, {
-                        [`categorias.${categoryName}`]: firebase.firestore.FieldValue.delete()
-                    });
-                });
-                await batch.commit();
-
-                row.remove();
-                categories = categories.filter(cat => cat !== categoryName);
-                calculate();
-            } catch (error) {
-                console.error('Erro ao excluir categoria:', error);
-            }
-        }
-
-        async function editCategory(button) {
-            const row = button.closest('tr');
-            const nameCell = row.querySelector('.category-name');
-            const oldName = nameCell.textContent;
-            
-            const input = document.createElement('input');
-            input.type = 'text';
-            input.value = oldName;
-            input.className = 'edit-input';
-            
-            input.onblur = async function() {
-                const newName = this.value.trim();
-                if (!newName || newName === oldName) {
-                    nameCell.textContent = oldName;
-                    return;
-                }
-
-                try {
-                    // Atualizar nome no Firestore
-                    await db.collection('categories').doc(oldName).delete();
-                    await db.collection('categories').doc(newName).set({});
-                    await updateCategoriesInFirestore(oldName, newName);
-
-                    categories = categories.map(cat => cat === oldName ? newName : cat);
-                    nameCell.textContent = newName;
-                    updateCategoryInputs(oldName, newName);
-                    calculate();
-                } catch (error) {
-                    console.error('Erro ao editar categoria:', error);
-                    nameCell.textContent = oldName;
-                }
-            };
-            
-            nameCell.replaceWith(input);
-            input.focus();
-        }
-
-        function updateCategoryInputs(oldName, newName) {
-            document.querySelectorAll(`input[id^="${oldName}_"]`).forEach(input => {
-                input.id = input.id.replace(oldName, newName);
-            });
-        }
-
-        function addAutoSaveListeners() {
-            document.querySelectorAll('input[type="number"]').forEach(input => {
-                input.addEventListener('input', async function() {
-                    const [type, mesKey] = this.id.split('_');
-                    const value = Number(this.value);
-
-                    try {
-                        if (type === 'salario') {
-                            await db.collection('months').doc(mesKey).update({
-                                salario: value
-                            });
-                        } else {
-                            await db.collection('months').doc(mesKey).update({
-                                [`categorias.${type}`]: value
-                            });
-                        }
-                        calculate();
-                    } catch (error) {
-                        console.error('Erro ao salvar alteração:', error);
-                    }
-                });
-            });
-        }
-
-        async function calculate() {
-            let saldoAnterior = 0;
-            const saldos = [];
-
-            for (const mes of meses) {
-                const doc = await db.collection('months').doc(mes.key).get();
-                const data = doc.data();
-                
-                const salario = data.salario || 0;
-                const totalGastos = Object.values(data.categorias || {}).reduce((a, b) => a + b, 0);
-                const saldoAtual = saldoAnterior + salario - totalGastos;
-
-                // Atualizar saldo no Firestore
-                await db.collection('months').doc(mes.key).update({
-                    saldo: saldoAtual
-                });
-
-                document.getElementById(`saldo_${mes.key}`).textContent = formatCurrency(saldoAtual);
-                saldos.push(saldoAtual);
-                saldoAnterior = saldoAtual;
-            }
-
-            updateChart(saldos);
-        }
-
-        function updateChart(saldos) {
-            const ctx = document.getElementById('myChart').getContext('2d');
-            const currentMonthIndex = meses.findIndex(m => m.date >= new Date());
-            const chartData = saldos.slice(currentMonthIndex, currentMonthIndex + 12);
-            const chartLabels = meses.slice(currentMonthIndex, currentMonthIndex + 12)
-                .map(m => `${m.name}/${m.year}`);
-
-            if (myChart) myChart.destroy();
-
-            myChart = new Chart(ctx, {
-                type: 'line',
-                data: {
-                    labels: chartLabels,
-                    datasets: [{
-                        label: 'Projeção do Saldo (12 meses)',
-                        data: chartData,
-                        borderColor: '#4CAF50',
-                        tension: 0.1,
-                        fill: false
-                    }]
-                },
-                options: {
-                    responsive: true,
-                    plugins: {
-                        tooltip: {
-                            callbacks: {
-                                label: (context) => formatCurrency(context.raw)
-                            }
-                        }
-                    },
-                    scales: {
-                        y: {
-                            ticks: {
-                                callback: (value) => formatCurrency(value)
-                            }
-                        }
-                    }
-                }
-            });
-        }
-
-        // Funções auxiliares mantidas do original
-        function toggleActions() {
-            showActions = !showActions;
-            updateActionsVisibility();
-            document.querySelector('.toggle-actions').textContent = 
-                `${showActions ? '▲ Ocultar' : '▼ Mostrar'} Controles`;
-        }
-
-        function updateActionsVisibility() {
-            const rows = document.querySelectorAll('#gastosHeader ~ tr:not(#saldoRow)');
-            rows.forEach(row => {
-                row.classList.toggle('show-actions', showActions);
-                row.draggable = showActions;
-            });
-        }
-
-        function addRowListeners(row) {
-            row.addEventListener('dragstart', () => draggedRow = row);
-            row.addEventListener('dragover', e => e.preventDefault());
-            row.addEventListener('drop', e => {
-                e.preventDefault();
-                if (draggedRow && draggedRow !== row) {
-                    const rows = Array.from(document.querySelectorAll('#gastosHeader ~ tr:not(#saldoRow)'));
-                    const oldIndex = rows.indexOf(draggedRow);
-                    const newIndex = rows.indexOf(row);
+                let categoriesList = '<h3>Categorias Existentes</h3>';
+                for (const key in categories) {
+                    categoriesList += `
+                        <div>
+                            ${categories[key].name} (${categories[key].type})
+                            <button onclick="editCategory('${key}')">Editar</button>
+                            <button onclick="deleteCategory('${key}')">Excluir</button>
+                        </div>
+                    `;
                     
-                    if (oldIndex < newIndex) {
-                        row.insertAdjacentElement('afterend', draggedRow);
-                    } else {
-                        row.insertAdjacentElement('beforebegin', draggedRow);
-                    }
+                    const option = document.createElement('option');
+                    option.value = key;
+                    option.textContent = categories[key].name;
+                    select.appendChild(option);
                 }
+                document.getElementById('categoriesList').innerHTML = categoriesList;
             });
         }
 
-        // Inicialização
-        initTable();
+        // Adicionar categoria
+        function addCategory() {
+            const name = document.getElementById('categoryName').value;
+            const type = document.getElementById('categoryType').value;
+            
+            database.ref('categories').push({
+                name: name,
+                type: type
+            });
+        }
+
+        // Editar categoria
+        function editCategory(key) {
+            const newName = prompt('Novo nome da categoria:');
+            if (newName) {
+                database.ref('categories/' + key).update({
+                    name: newName
+                });
+            }
+        }
+
+        // Excluir categoria
+        function deleteCategory(key) {
+            if (confirm('Tem certeza que deseja excluir esta categoria?')) {
+                database.ref('categories/' + key).remove();
+            }
+        }
+
+        // Adicionar transação
+        function addTransaction() {
+            const categoryKey = document.getElementById('transactionCategory').value;
+            const amount = parseFloat(document.getElementById('transactionAmount').value);
+            const month = document.getElementById('transactionMonth').value;
+
+            database.ref('transactions').push({
+                category: categoryKey,
+                amount: amount,
+                month: month,
+                date: firebase.database.ServerValue.TIMESTAMP
+            });
+        }
+
+        // Calcular saldo
+        function calculateBalance() {
+            const transactionsRef = database.ref('transactions');
+            transactionsRef.on('value', async (snapshot) => {
+                const transactions = snapshot.val() || {};
+                const categories = await database.ref('categories').once('value').then(snap => snap.val() || {});
+
+                const balance = {};
+
+                for (const key in transactions) {
+                    const transaction = transactions[key];
+                    const category = categories[transaction.category];
+                    const month = transaction.month;
+
+                    if (!balance[month]) {
+                        balance[month] = { income: 0, expense: 0, total: 0 };
+                    }
+
+                    if (category.type === 'income') {
+                        balance[month].income += transaction.amount;
+                    } else {
+                        balance[month].expense += transaction.amount;
+                    }
+
+                    balance[month].total = balance[month].income - balance[month].expense;
+                }
+
+                // Exibir saldo
+                let balanceHTML = '<table><tr><th>Mês</th><th>Receitas</th><th>Despesas</th><th>Saldo</th></tr>';
+                for (const month in balance) {
+                    balanceHTML += `
+                        <tr>
+                            <td>${month}</td>
+                            <td>R$ ${balance[month].income.toFixed(2)}</td>
+                            <td>R$ ${balance[month].expense.toFixed(2)}</td>
+                            <td>R$ ${balance[month].total.toFixed(2)}</td>
+                        </tr>
+                    `;
+                }
+                balanceHTML += '</table>';
+                document.getElementById('balance').innerHTML = balanceHTML;
+            });
+        }
+
+        // Inicializar
+        loadCategories();
+        calculateBalance();
     </script>
 </body>
 </html>
