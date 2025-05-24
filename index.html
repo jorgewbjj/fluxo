@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <html lang="pt-BR">
 <head>
-  <meta charset="UTF-8">
+  <meta charset="UTF-8" />
   <title>Fluxo de Caixa</title>
   <style>
     :root {
@@ -74,7 +74,6 @@
       background-color: #3730a3;
     }
 
-    /* Modal */
     .modal {
       display: none;
       position: fixed;
@@ -117,11 +116,38 @@
     .income-label { color: var(--income); }
     .expense-label { color: var(--expense); }
 
+    .saldo-inicial-container {
+      max-width: 300px;
+      margin: 0 auto 15px auto;
+      text-align: center;
+    }
+
+    .saldo-inicial-container label {
+      font-weight: bold;
+      margin-right: 8px;
+      color: #333;
+    }
+
+    .saldo-inicial-container input {
+      width: 100px;
+      padding: 6px 8px;
+      font-size: 16px;
+      border: 1px solid var(--gray);
+      border-radius: 4px;
+      text-align: right;
+    }
+
   </style>
 </head>
 <body>
 
   <h2>Fluxo de Caixa</h2>
+
+  <div class="saldo-inicial-container">
+    <label for="saldoInicialInput">Saldo Inicial (R$):</label>
+    <input type="number" id="saldoInicialInput" step="0.01" value="0" />
+  </div>
+
   <div class="container">
     <button class="btn" onclick="openModal()">+ Adicionar Categoria</button>
     <table id="cashflowTable">
@@ -134,14 +160,14 @@
   <div id="modal" class="modal">
     <div class="modal-content">
       <h3>Nova Categoria</h3>
-      <input type="text" id="categoryName" placeholder="Nome da Categoria">
+      <input type="text" id="categoryName" placeholder="Nome da Categoria" />
       <select id="categoryType">
         <option value="receita">Receita</option>
         <option value="despesa">Despesa</option>
       </select>
       <div class="modal-buttons">
         <button class="btn btn-cancel" onclick="closeModal()">Cancelar</button>
-        <button class="btn" onclick="addCategory()">Adicionar</button>
+        <button class="btn" onclick="confirmAddCategory()">Adicionar</button>
       </div>
     </div>
   </div>
@@ -152,7 +178,6 @@
 
   <script>
     // 🔁 Substitua com suas credenciais do Firebase:
-    const firebaseConfig = {
 const firebaseConfig = {
   apiKey: "AIzaSyCgSkYIvenfEzyjef50OD01Ox9et-nyBMo",
   authDomain: "fluxo-6d716.firebaseapp.com",
@@ -161,7 +186,7 @@ const firebaseConfig = {
   storageBucket: "fluxo-6d716.firebasestorage.app",
   messagingSenderId: "761253335013",
   appId: "1:761253335013:web:44c30372a4749203a3690c"
-};
+}
 
     firebase.initializeApp(firebaseConfig);
     const db = firebase.database();
@@ -173,7 +198,22 @@ const firebaseConfig = {
       return date.toLocaleDateString('pt-BR', { month: 'short', year: 'numeric' });
     });
 
+    // Leitura e gravação do saldo inicial no localStorage
+    const saldoInput = document.getElementById("saldoInicialInput");
+    let saldoInicial = parseFloat(localStorage.getItem("saldoInicial")) || 0;
+    saldoInput.value = saldoInicial.toFixed(2);
+
+    saldoInput.addEventListener("change", () => {
+      saldoInicial = parseFloat(saldoInput.value) || 0;
+      localStorage.setItem("saldoInicial", saldoInicial.toFixed(2));
+      if (lastData) renderTable(lastData);
+    });
+
+    let lastData = null;
+
     function renderTable(data = {}) {
+      lastData = data; // salvar referência
+
       const head = document.getElementById("tableHead");
       const body = document.getElementById("tableBody");
       head.innerHTML = '';
@@ -184,6 +224,8 @@ const firebaseConfig = {
       head.appendChild(tr);
 
       const totals = new Array(months.length).fill(0);
+      const totalReceita = new Array(months.length).fill(0);
+      const totalDespesa = new Array(months.length).fill(0);
 
       Object.entries(data).forEach(([key, value]) => {
         const tr = document.createElement("tr");
@@ -205,6 +247,12 @@ const firebaseConfig = {
           const num = parseFloat(val.replace(',', '.')) || 0;
           totals[i] += num;
 
+          if (value.type === 'receita') {
+            totalReceita[i] += num;
+          } else {
+            totalDespesa[i] += num;
+          }
+
           const td = document.createElement("td");
           td.contentEditable = true;
           td.innerText = val;
@@ -217,11 +265,34 @@ const firebaseConfig = {
         body.appendChild(tr);
       });
 
+      // Linha Total
       const totalRow = document.createElement("tr");
       totalRow.className = 'total-row';
       totalRow.innerHTML = `<td>Total</td>` +
         totals.map(t => `<td>${t.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</td>`).join('');
       body.appendChild(totalRow);
+
+      // Linha Receita - Despesa
+      const netRow = document.createElement("tr");
+      netRow.className = 'total-row';
+      netRow.innerHTML = `<td>Receita - Despesa</td>` +
+        months.map((_, i) => {
+          const net = totalReceita[i] - totalDespesa[i];
+          return `<td>${net.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</td>`;
+        }).join('');
+      body.appendChild(netRow);
+
+      // Linha Saldo Acumulado
+      const saldoRow = document.createElement("tr");
+      saldoRow.className = 'total-row';
+      saldoRow.innerHTML = `<td>Saldo Acumulado</td>`;
+
+      let acumulado = saldoInicial;
+      for (let i = 0; i < months.length; i++) {
+        acumulado += totalReceita[i] - totalDespesa[i];
+        saldoRow.innerHTML += `<td>${acumulado.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</td>`;
+      }
+      body.appendChild(saldoRow);
     }
 
     function openModal() {
@@ -234,10 +305,10 @@ const firebaseConfig = {
       document.getElementById('modal').style.display = 'none';
     }
 
-    function addCategory() {
+    function confirmAddCategory() {
       const name = document.getElementById('categoryName').value.trim();
       const type = document.getElementById('categoryType').value;
-      if (name === '') return alert("Informe o nome da categoria");
+      if (!name) return alert("Informe o nome da categoria.");
 
       const newRef = tableRef.push();
       newRef.set({ name, type, values: {} });
@@ -245,7 +316,8 @@ const firebaseConfig = {
     }
 
     function editCategoryName(key, name) {
-      tableRef.child(`${key}/name`).set(name.trim());
+      const newName = name.trim().replace(/[\n\r]/g, '');
+      tableRef.child(`${key}/name`).set(newName);
     }
 
     function deleteCategory(key) {
@@ -263,13 +335,13 @@ const firebaseConfig = {
         if (newIdx < 0 || newIdx >= keys.length) return;
         const reordered = [...keys];
         [reordered[idx], reordered[newIdx]] = [reordered[newIdx], reordered[idx]];
-
         const updates = {};
         reordered.forEach(k => updates[k] = data[k]);
         tableRef.set(updates);
       });
     }
 
+    // 🔁 Inicialização
     tableRef.on("value", snap => {
       const data = snap.val() || {};
       renderTable(data);
