@@ -19,7 +19,6 @@
         <thead class="bg-gray-200 text-gray-600 uppercase text-xs">
           <tr id="header-row">
             <th class="py-3 px-4 text-left">Categoria</th>
-            <th class="py-3 px-4 text-left">Tipo</th>
             <!-- Meses adicionados via JS -->
           </tr>
         </thead>
@@ -27,7 +26,6 @@
         <tfoot class="bg-gray-100 font-semibold text-sm">
           <tr id="saldo-row">
             <td class="py-2 px-4">Saldo</td>
-            <td></td>
             <!-- Saldos mensais inseridos via JS -->
           </tr>
         </tfoot>
@@ -36,6 +34,26 @@
 
     <div class="mb-6">
       <canvas id="cashflowChart"></canvas>
+    </div>
+  </div>
+
+  <!-- Modal -->
+  <div id="category-modal" class="fixed inset-0 flex items-center justify-center bg-black bg-opacity-50 hidden">
+    <div class="bg-white rounded-lg p-6 shadow-lg max-w-sm w-full">
+      <h2 class="text-lg font-semibold mb-4">Nova Categoria</h2>
+      <label class="block mb-2">Nome:
+        <input id="new-category-name" type="text" class="w-full border px-3 py-2 rounded mt-1">
+      </label>
+      <label class="block mb-4">Tipo:
+        <select id="new-category-type" class="w-full border px-3 py-2 rounded mt-1">
+          <option value="Receita">Receita</option>
+          <option value="Despesa">Despesa</option>
+        </select>
+      </label>
+      <div class="text-right">
+        <button id="cancel-modal" class="mr-2 px-4 py-2 rounded bg-gray-300 hover:bg-gray-400">Cancelar</button>
+        <button id="save-category" class="px-4 py-2 rounded bg-blue-600 text-white hover:bg-blue-700">Salvar</button>
+      </div>
     </div>
   </div>
 
@@ -66,6 +84,13 @@ const firebaseConfig = {
     const tableBody = document.getElementById("table-body");
     const addBtn = document.getElementById("add-category");
     const chartCtx = document.getElementById("cashflowChart").getContext("2d");
+
+    const modal = document.getElementById("category-modal");
+    const cancelModal = document.getElementById("cancel-modal");
+    const saveCategory = document.getElementById("save-category");
+    const newCategoryName = document.getElementById("new-category-name");
+    const newCategoryType = document.getElementById("new-category-type");
+
     let chart;
 
     months.forEach(month => {
@@ -121,26 +146,9 @@ const firebaseConfig = {
       const tr = document.createElement("tr");
 
       const nameCell = document.createElement("td");
-      nameCell.contentEditable = true;
       nameCell.className = "py-2 px-4 border font-medium bg-gray-50";
       nameCell.innerText = data.name || "Nova Categoria";
-      nameCell.addEventListener("blur", () => {
-        db.ref(`cashflow/categories/${categoryId}/name`).set(nameCell.innerText.trim());
-      });
       tr.appendChild(nameCell);
-
-      const typeCell = document.createElement("td");
-      const select = document.createElement("select");
-      select.className = "px-2 py-1 border rounded";
-      select.innerHTML = `<option value="Receita">Receita</option><option value="Despesa">Despesa</option>`;
-      select.value = data.type || "Receita";
-      select.addEventListener("change", () => {
-        db.ref(`cashflow/categories/${categoryId}/type`).set(select.value);
-        loadAndRenderChart();
-      });
-      typeCell.className = "py-2 px-4 border";
-      typeCell.appendChild(select);
-      tr.appendChild(typeCell);
 
       months.forEach(month => {
         const td = document.createElement("td");
@@ -162,21 +170,6 @@ const firebaseConfig = {
 
       tableBody.appendChild(tr);
     }
-
-    db.ref("cashflow/categories").once("value", snapshot => {
-      const categories = snapshot.val() || {};
-      Object.keys(categories).forEach(id => {
-        renderCategoryRow(id, categories[id]);
-      });
-      loadAndRenderChart();
-    });
-
-    addBtn.addEventListener("click", () => {
-      const newId = db.ref().child("cashflow/categories").push().key;
-      const newData = { name: "Nova Categoria", type: "Receita" };
-      db.ref(`cashflow/categories/${newId}`).set(newData);
-      renderCategoryRow(newId, newData);
-    });
 
     function loadAndRenderChart() {
       db.ref("cashflow").once("value", snapshot => {
@@ -209,6 +202,37 @@ const firebaseConfig = {
         renderChart({ saldos });
       });
     }
+
+    db.ref("cashflow/categories").once("value", snapshot => {
+      const categories = snapshot.val() || {};
+      Object.keys(categories).forEach(id => {
+        renderCategoryRow(id, categories[id]);
+      });
+      loadAndRenderChart();
+    });
+
+    addBtn.addEventListener("click", () => {
+      modal.classList.remove("hidden");
+      newCategoryName.value = "";
+      newCategoryType.value = "Receita";
+    });
+
+    cancelModal.addEventListener("click", () => {
+      modal.classList.add("hidden");
+    });
+
+    saveCategory.addEventListener("click", () => {
+      const name = newCategoryName.value.trim();
+      const type = newCategoryType.value;
+      if (!name) return;
+
+      const newId = db.ref().child("cashflow/categories").push().key;
+      const newData = { name, type };
+      db.ref(`cashflow/categories/${newId}`).set(newData);
+      renderCategoryRow(newId, newData);
+      modal.classList.add("hidden");
+      loadAndRenderChart();
+    });
   </script>
 </body>
 </html>
