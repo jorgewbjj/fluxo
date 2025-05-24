@@ -65,6 +65,24 @@
       color: green;
     }
   </style>
+
+  <!-- Firebase SDK -->
+  <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-database.js"></script>
+  <script>
+    const firebaseConfig = {
+  apiKey: "AIzaSyCgSkYIvenfEzyjef50OD01Ox9et-nyBMo",
+  authDomain: "fluxo-6d716.firebaseapp.com",
+  databaseURL: "https://fluxo-6d716-default-rtdb.firebaseio.com",
+  projectId: "fluxo-6d716",
+  storageBucket: "fluxo-6d716.firebasestorage.app",
+  messagingSenderId: "761253335013",
+  appId: "1:761253335013:web:44c30372a4749203a3690c"
+};
+
+    firebase.initializeApp(firebaseConfig);
+    const db = firebase.database();
+  </script>
 </head>
 <body>
   <h1>Fluxo de Caixa - 24 Meses</h1>
@@ -73,11 +91,11 @@
       <thead>
         <tr>
           <th>Categoria</th>
-          <!-- Gerado dinamicamente -->
+          <!-- Cabeçalho dos meses será gerado via JS -->
         </tr>
       </thead>
       <tbody id="tableBody">
-        <!-- Categorias e dados aqui -->
+        <!-- Corpo da tabela será gerado via JS -->
       </tbody>
     </table>
   </div>
@@ -107,11 +125,15 @@
       tdCategoria.textContent = cat;
       row.appendChild(tdCategoria);
 
-      meses.forEach(() => {
+      meses.forEach((mes, i) => {
         const td = document.createElement('td');
         td.contentEditable = true;
         td.textContent = "0";
-        td.addEventListener('input', calcularSaldo);
+        td.addEventListener('input', () => {
+          const value = parseFloat(td.textContent) || 0;
+          db.ref(`fluxo/${cat}/${mes}`).set(value);
+          calcularSaldo();
+        });
         row.appendChild(td);
       });
 
@@ -132,13 +154,14 @@
     }
     tbody.appendChild(rowSaldo);
 
+    // Cálculo do saldo
     function calcularSaldo() {
       const rows = tbody.querySelectorAll('tr');
       const saldoRow = rows[rows.length - 1];
       const saldos = new Array(meses.length).fill(0);
 
       rows.forEach((row, i) => {
-        if (i === rows.length - 1) return; // pula saldo
+        if (i === rows.length - 1) return;
         const isReceita = row.firstChild.textContent.toLowerCase().includes('receita');
         row.querySelectorAll('td:not(:first-child)').forEach((cell, j) => {
           const val = parseFloat(cell.textContent) || 0;
@@ -152,7 +175,22 @@
       });
     }
 
-    calcularSaldo();
+    // Carrega dados do Firebase
+    window.onload = function () {
+      categorias.forEach(cat => {
+        meses.forEach((mes, i) => {
+          db.ref(`fluxo/${cat}/${mes}`).on('value', snapshot => {
+            const val = snapshot.val();
+            const row = [...tbody.querySelectorAll('tr')].find(r => r.firstChild.textContent === cat);
+            const cell = row.children[i + 1];
+            if (val !== null) {
+              cell.textContent = val;
+              calcularSaldo();
+            }
+          });
+        });
+      });
+    }
   </script>
 </body>
 </html>
