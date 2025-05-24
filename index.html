@@ -19,14 +19,12 @@
         <thead class="bg-gray-200 text-gray-600 uppercase text-xs">
           <tr id="header-row">
             <th class="py-3 px-4 text-left">Categoria</th>
-            <!-- Meses adicionados via JS -->
           </tr>
         </thead>
         <tbody id="table-body"></tbody>
         <tfoot class="bg-gray-100 font-semibold text-sm">
           <tr id="saldo-row">
             <td class="py-2 px-4">Saldo</td>
-            <!-- Saldos mensais inseridos via JS -->
           </tr>
         </tfoot>
       </table>
@@ -112,25 +110,21 @@ const firebaseConfig = {
       });
     }
 
-    function renderChart(data) {
-      const saldos = months.map(month => data.saldos[month] || 0);
-
+    function renderChart(saldos) {
+      const data = months.map(month => saldos[month] || 0);
       if (chart) chart.destroy();
-
       chart = new Chart(chartCtx, {
         type: 'line',
         data: {
           labels: months,
-          datasets: [
-            {
-              label: 'Saldo Mensal',
-              data: saldos,
-              borderColor: 'rgba(59,130,246,1)',
-              backgroundColor: 'rgba(59,130,246,0.2)',
-              fill: true,
-              tension: 0.4
-            }
-          ]
+          datasets: [{
+            label: 'Saldo Mensal',
+            data: data,
+            borderColor: 'rgba(59,130,246,1)',
+            backgroundColor: 'rgba(59,130,246,0.2)',
+            fill: true,
+            tension: 0.4
+          }]
         },
         options: {
           responsive: true,
@@ -144,7 +138,6 @@ const firebaseConfig = {
 
     function renderCategoryRow(categoryId, data = {}) {
       const tr = document.createElement("tr");
-
       const nameCell = document.createElement("td");
       nameCell.className = "py-2 px-4 border font-medium bg-gray-50";
       nameCell.innerText = data.name || "Nova Categoria";
@@ -179,6 +172,7 @@ const firebaseConfig = {
         const receitas = {};
         const despesas = {};
         const saldos = {};
+        let saldoAcumulado = 0;
 
         months.forEach(month => {
           receitas[month] = 0;
@@ -194,15 +188,14 @@ const firebaseConfig = {
           });
         });
 
-        let acumulado = 0;
         months.forEach(month => {
           const saldoMensal = receitas[month] - despesas[month];
-          acumulado += saldoMensal;
-          saldos[month] = acumulado;
+          saldoAcumulado += saldoMensal;
+          saldos[month] = saldoAcumulado;
         });
 
         updateSaldoRow(saldos);
-        renderChart({ saldos });
+        renderChart(saldos);
       });
     }
 
