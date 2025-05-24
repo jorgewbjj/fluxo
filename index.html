@@ -3,33 +3,36 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Fluxo de Caixa Editável</title>
+  <title>Fluxo de Caixa Avançado</title>
   <script src="https://cdn.tailwindcss.com"></script>
   <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-database-compat.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 </head>
 <body class="bg-gray-50 text-gray-800 font-sans">
   <div class="max-w-7xl mx-auto p-6">
-    <h1 class="text-3xl font-bold mb-6 text-center">Fluxo de Caixa Editável</h1>
+    <h1 class="text-3xl font-bold mb-6 text-center">Fluxo de Caixa com Firebase</h1>
     <button id="add-category" class="mb-4 bg-blue-600 text-white px-4 py-2 rounded hover:bg-blue-700">+ Adicionar Categoria</button>
-    <div class="overflow-auto shadow-lg rounded-lg bg-white">
+
+    <div class="overflow-auto shadow-lg rounded-lg bg-white mb-6">
       <table class="min-w-full text-sm text-gray-700" id="cashflow-table">
         <thead class="bg-gray-200 text-gray-600 uppercase text-xs">
           <tr id="header-row">
             <th class="py-3 px-4 text-left">Categoria</th>
             <th class="py-3 px-4 text-left">Tipo</th>
-            <!-- Meses serão inseridos aqui via JS -->
+            <!-- Meses adicionados via JS -->
           </tr>
         </thead>
-        <tbody id="table-body">
-          <!-- Dados dinâmicos -->
-        </tbody>
+        <tbody id="table-body"></tbody>
       </table>
+    </div>
+
+    <div class="mb-6">
+      <canvas id="cashflowChart"></canvas>
     </div>
   </div>
 
   <script>
-    // 🔗 Firebase config - substitua com seus dados
 const firebaseConfig = {
   apiKey: "AIzaSyCgSkYIvenfEzyjef50OD01Ox9et-nyBMo",
   authDomain: "fluxo-6d716.firebaseapp.com",
@@ -46,16 +49,16 @@ const firebaseConfig = {
     const monthNames = ["Jan", "Fev", "Mar", "Abr", "Mai", "Jun", "Jul", "Ago", "Set", "Out", "Nov", "Dez"];
     const months = [];
     let now = new Date();
-
     for (let i = 0; i < 24; i++) {
-      const label = `${monthNames[now.getMonth()]}/${now.getFullYear().toString().slice(-2)}`;
-      months.push(label);
+      months.push(`${monthNames[now.getMonth()]}/${now.getFullYear().toString().slice(-2)}`);
       now.setMonth(now.getMonth() + 1);
     }
 
     const headerRow = document.getElementById("header-row");
     const tableBody = document.getElementById("table-body");
     const addBtn = document.getElementById("add-category");
+    const chartCtx = document.getElementById("cashflowChart").getContext("2d");
+    let chart;
 
     months.forEach(month => {
       const th = document.createElement("th");
@@ -64,10 +67,48 @@ const firebaseConfig = {
       headerRow.appendChild(th);
     });
 
+    function renderChart(data) {
+      const receitas = months.map(month => data.receitas[month] || 0);
+      const despesas = months.map(month => data.despesas[month] || 0);
+      const saldos = months.map((_, i) => receitas[i] - despesas[i]);
+
+      if (chart) chart.destroy();
+
+      chart = new Chart(chartCtx, {
+        type: 'bar',
+        data: {
+          labels: months,
+          datasets: [
+            {
+              label: 'Receitas',
+              data: receitas,
+              backgroundColor: 'rgba(34,197,94,0.6)'
+            },
+            {
+              label: 'Despesas',
+              data: despesas,
+              backgroundColor: 'rgba(239,68,68,0.6)'
+            },
+            {
+              label: 'Saldo',
+              data: saldos,
+              backgroundColor: 'rgba(59,130,246,0.6)'
+            }
+          ]
+        },
+        options: {
+          responsive: true,
+          plugins: {
+            legend: { position: 'top' },
+            title: { display: true, text: 'Resumo Mensal' }
+          }
+        }
+      });
+    }
+
     function renderCategoryRow(categoryId, data = {}) {
       const tr = document.createElement("tr");
 
-      // Nome da categoria
       const nameCell = document.createElement("td");
       nameCell.contentEditable = true;
       nameCell.className = "py-2 px-4 border font-medium bg-gray-50";
@@ -77,37 +118,32 @@ const firebaseConfig = {
       });
       tr.appendChild(nameCell);
 
-      // Tipo (Receita/Despesa)
       const typeCell = document.createElement("td");
       const select = document.createElement("select");
       select.className = "px-2 py-1 border rounded";
-      select.innerHTML = `
-        <option value="Receita">Receita</option>
-        <option value="Despesa">Despesa</option>
-      `;
+      select.innerHTML = `<option value="Receita">Receita</option><option value="Despesa">Despesa</option>`;
       select.value = data.type || "Receita";
       select.addEventListener("change", () => {
         db.ref(`cashflow/categories/${categoryId}/type`).set(select.value);
+        loadAndRenderChart();
       });
       typeCell.className = "py-2 px-4 border";
       typeCell.appendChild(select);
       tr.appendChild(typeCell);
 
-      // Células de valor por mês
       months.forEach(month => {
         const td = document.createElement("td");
         td.className = "border text-center py-2 px-4 hover:bg-yellow-50";
         td.contentEditable = true;
 
-        // Carrega valor
         db.ref(`cashflow/values/${categoryId}/${month}`).once("value", snapshot => {
           td.innerText = snapshot.val() || "";
         });
 
-        // Salva valor
         td.addEventListener("blur", () => {
-          const value = td.innerText.trim();
+          const value = parseFloat(td.innerText.trim()) || 0;
           db.ref(`cashflow/values/${categoryId}/${month}`).set(value);
+          loadAndRenderChart();
         });
 
         tr.appendChild(td);
@@ -116,21 +152,46 @@ const firebaseConfig = {
       tableBody.appendChild(tr);
     }
 
-    // 🔁 Carrega categorias existentes
     db.ref("cashflow/categories").once("value", snapshot => {
       const categories = snapshot.val() || {};
       Object.keys(categories).forEach(id => {
         renderCategoryRow(id, categories[id]);
       });
+      loadAndRenderChart();
     });
 
-    // ➕ Adicionar nova categoria
     addBtn.addEventListener("click", () => {
       const newId = db.ref().child("cashflow/categories").push().key;
       const newData = { name: "Nova Categoria", type: "Receita" };
       db.ref(`cashflow/categories/${newId}`).set(newData);
       renderCategoryRow(newId, newData);
     });
+
+    function loadAndRenderChart() {
+      db.ref("cashflow").once("value", snapshot => {
+        const data = snapshot.val() || {};
+        const values = data.values || {};
+        const categories = data.categories || {};
+        const receitas = {};
+        const despesas = {};
+
+        months.forEach(month => {
+          receitas[month] = 0;
+          despesas[month] = 0;
+        });
+
+        Object.entries(values).forEach(([catId, meses]) => {
+          const tipo = categories[catId]?.type || "Receita";
+          months.forEach(month => {
+            const val = parseFloat(meses[month]) || 0;
+            if (tipo === "Receita") receitas[month] += val;
+            else despesas[month] += val;
+          });
+        });
+
+        renderChart({ receitas, despesas });
+      });
+    }
   </script>
 </body>
 </html>
