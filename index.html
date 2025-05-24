@@ -2,38 +2,149 @@
 <html lang="pt-BR">
 <head>
   <meta charset="UTF-8">
-  <title>Fluxo de Caixa - Firebase</title>
+  <title>Fluxo de Caixa</title>
   <style>
+    :root {
+      --bg: #f4f6f8;
+      --white: #fff;
+      --gray: #ccc;
+      --primary: #4f46e5;
+      --income: #34d399;
+      --expense: #f87171;
+    }
+
+    body {
+      font-family: Arial, sans-serif;
+      background: var(--bg);
+      margin: 0;
+      padding: 20px;
+    }
+
+    h2 {
+      text-align: center;
+      color: #333;
+    }
+
+    .container {
+      max-width: 100%;
+      overflow-x: auto;
+    }
+
     table {
       width: 100%;
       border-collapse: collapse;
-      margin-top: 10px;
+      background-color: var(--white);
+      box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+      border-radius: 6px;
+      overflow: hidden;
     }
+
     th, td {
-      border: 1px solid #ccc;
-      padding: 5px;
+      padding: 10px;
+      border: 1px solid #e0e0e0;
       text-align: center;
     }
+
     td[contenteditable="true"] {
-      background-color: #f9f9f9;
+      background-color: #fcfcfc;
     }
-    .category-controls button {
-      margin-left: 4px;
-    }
+
     .total-row {
-      background-color: #eaeaea;
+      background-color: #f0f0f0;
       font-weight: bold;
     }
+
+    .category-controls {
+      display: inline-flex;
+      gap: 5px;
+      margin-left: 8px;
+    }
+
+    .btn {
+      background-color: var(--primary);
+      color: white;
+      padding: 8px 16px;
+      border: none;
+      border-radius: 6px;
+      cursor: pointer;
+      margin-bottom: 10px;
+    }
+
+    .btn:hover {
+      background-color: #3730a3;
+    }
+
+    /* Modal */
+    .modal {
+      display: none;
+      position: fixed;
+      z-index: 1000;
+      left: 0; top: 0;
+      width: 100%; height: 100%;
+      background: rgba(0, 0, 0, 0.5);
+      justify-content: center;
+      align-items: center;
+    }
+
+    .modal-content {
+      background: white;
+      padding: 20px;
+      border-radius: 8px;
+      width: 300px;
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+    }
+
+    .modal input, .modal select {
+      padding: 8px;
+      font-size: 14px;
+      border: 1px solid var(--gray);
+      border-radius: 4px;
+    }
+
+    .modal-buttons {
+      display: flex;
+      justify-content: space-between;
+      margin-top: 10px;
+    }
+
+    .modal .btn-cancel {
+      background: #e5e7eb;
+      color: #333;
+    }
+
+    .income-label { color: var(--income); }
+    .expense-label { color: var(--expense); }
+
   </style>
 </head>
 <body>
 
   <h2>Fluxo de Caixa</h2>
-  <button onclick="addCategory()">+ Adicionar Categoria</button>
-  <table id="cashflowTable">
-    <thead id="tableHead"></thead>
-    <tbody id="tableBody"></tbody>
-  </table>
+  <div class="container">
+    <button class="btn" onclick="openModal()">+ Adicionar Categoria</button>
+    <table id="cashflowTable">
+      <thead id="tableHead"></thead>
+      <tbody id="tableBody"></tbody>
+    </table>
+  </div>
+
+  <!-- Modal para adicionar categoria -->
+  <div id="modal" class="modal">
+    <div class="modal-content">
+      <h3>Nova Categoria</h3>
+      <input type="text" id="categoryName" placeholder="Nome da Categoria">
+      <select id="categoryType">
+        <option value="receita">Receita</option>
+        <option value="despesa">Despesa</option>
+      </select>
+      <div class="modal-buttons">
+        <button class="btn btn-cancel" onclick="closeModal()">Cancelar</button>
+        <button class="btn" onclick="addCategory()">Adicionar</button>
+      </div>
+    </div>
+  </div>
 
   <!-- Firebase SDK -->
   <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
@@ -41,6 +152,7 @@
 
   <script>
     // 🔁 Substitua com suas credenciais do Firebase:
+    const firebaseConfig = {
 const firebaseConfig = {
   apiKey: "AIzaSyCgSkYIvenfEzyjef50OD01Ox9et-nyBMo",
   authDomain: "fluxo-6d716.firebaseapp.com",
@@ -67,38 +179,37 @@ const firebaseConfig = {
       head.innerHTML = '';
       body.innerHTML = '';
 
-      // Cabeçalho
       const tr = document.createElement("tr");
       tr.innerHTML = `<th>Categoria</th>` + months.map(m => `<th>${m}</th>`).join('');
       head.appendChild(tr);
 
-      // Soma para cada coluna
       const totals = new Array(months.length).fill(0);
 
-      // Corpo
-      Object.entries(data).forEach(([categoryKey, categoryData], index) => {
+      Object.entries(data).forEach(([key, value]) => {
         const tr = document.createElement("tr");
+
+        const labelClass = value.type === 'receita' ? 'income-label' : 'expense-label';
         tr.innerHTML = `
-          <td contenteditable="true" onblur="editCategoryName('${categoryKey}', this.innerText)">
-            ${categoryData.name || ''}
-            <span class="category-controls">
-              <button onclick="moveCategory('${categoryKey}', -1)">⬆️</button>
-              <button onclick="moveCategory('${categoryKey}', 1)">⬇️</button>
-              <button onclick="deleteCategory('${categoryKey}')">🗑️</button>
-            </span>
+          <td contenteditable="true" onblur="editCategoryName('${key}', this.innerText)">
+            <span class="${labelClass}">${value.name || ''}</span>
+            <div class="category-controls">
+              <button onclick="moveCategory('${key}', -1)">⬆️</button>
+              <button onclick="moveCategory('${key}', 1)">⬇️</button>
+              <button onclick="deleteCategory('${key}')">🗑️</button>
+            </div>
           </td>
         `;
 
-        months.forEach((month, mIndex) => {
-          const cellValue = categoryData.values?.[mIndex] || '';
-          const value = parseFloat(cellValue.replace(',', '.')) || 0;
-          totals[mIndex] += value;
+        months.forEach((_, i) => {
+          const val = value.values?.[i] || '';
+          const num = parseFloat(val.replace(',', '.')) || 0;
+          totals[i] += num;
 
           const td = document.createElement("td");
           td.contentEditable = true;
-          td.innerText = cellValue;
+          td.innerText = val;
           td.onblur = () => {
-            tableRef.child(`${categoryKey}/values/${mIndex}`).set(td.innerText);
+            tableRef.child(`${key}/values/${i}`).set(td.innerText);
           };
           tr.appendChild(td);
         });
@@ -106,56 +217,63 @@ const firebaseConfig = {
         body.appendChild(tr);
       });
 
-      // Linha de Totais
       const totalRow = document.createElement("tr");
-      totalRow.classList.add("total-row");
+      totalRow.className = 'total-row';
       totalRow.innerHTML = `<td>Total</td>` +
         totals.map(t => `<td>${t.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</td>`).join('');
       body.appendChild(totalRow);
     }
 
-    function addCategory() {
-      const newCategoryRef = tableRef.push();
-      newCategoryRef.set({ name: "Nova Categoria", values: {} });
+    function openModal() {
+      document.getElementById('modal').style.display = 'flex';
+      document.getElementById('categoryName').value = '';
+      document.getElementById('categoryType').value = 'receita';
     }
 
-    function editCategoryName(key, newName) {
-      tableRef.child(`${key}/name`).set(newName.trim());
+    function closeModal() {
+      document.getElementById('modal').style.display = 'none';
+    }
+
+    function addCategory() {
+      const name = document.getElementById('categoryName').value.trim();
+      const type = document.getElementById('categoryType').value;
+      if (name === '') return alert("Informe o nome da categoria");
+
+      const newRef = tableRef.push();
+      newRef.set({ name, type, values: {} });
+      closeModal();
+    }
+
+    function editCategoryName(key, name) {
+      tableRef.child(`${key}/name`).set(name.trim());
     }
 
     function deleteCategory(key) {
-      if (confirm("Tem certeza que deseja excluir esta categoria?")) {
+      if (confirm("Excluir esta categoria?")) {
         tableRef.child(key).remove();
       }
     }
 
-    function moveCategory(key, direction) {
-      tableRef.once("value", snapshot => {
-        const data = snapshot.val();
-        if (!data) return;
-
+    function moveCategory(key, dir) {
+      tableRef.once("value", snap => {
+        const data = snap.val();
         const keys = Object.keys(data);
-        const index = keys.indexOf(key);
-        const newIndex = index + direction;
-        if (newIndex < 0 || newIndex >= keys.length) return;
-
+        const idx = keys.indexOf(key);
+        const newIdx = idx + dir;
+        if (newIdx < 0 || newIdx >= keys.length) return;
         const reordered = [...keys];
-        [reordered[index], reordered[newIndex]] = [reordered[newIndex], reordered[index]];
+        [reordered[idx], reordered[newIdx]] = [reordered[newIdx], reordered[idx]];
 
         const updates = {};
-        reordered.forEach(k => {
-          updates[k] = data[k];
-        });
-
+        reordered.forEach(k => updates[k] = data[k]);
         tableRef.set(updates);
       });
     }
 
-    tableRef.on("value", snapshot => {
-      const data = snapshot.val() || {};
+    tableRef.on("value", snap => {
+      const data = snap.val() || {};
       renderTable(data);
     });
   </script>
-
 </body>
 </html>
