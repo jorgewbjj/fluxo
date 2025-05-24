@@ -1,1 +1,342 @@
-ca474327ac9060dd91e7aa9d0d181db3889bae97
+<html lang="pt-br">
+<head>
+    <meta charset="UTF-8">
+    <title>Fluxo de Caixa Completo</title>
+    <title>Gestão Financeira Completa</title>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script type="module">
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/9.22.2/firebase-app.js";
+        import { 
+@@ -15,8 +16,7 @@
+            get 
+        } from "https://www.gstatic.com/firebasejs/9.22.2/firebase-database.js";
+
+        // Configuração do Firebase (substitua pelos seus dados)
+const firebaseConfig = {
+ const firebaseConfig = {
+  apiKey: "AIzaSyCgSkYIvenfEzyjef50OD01Ox9et-nyBMo",
+  authDomain: "fluxo-6d716.firebaseapp.com",
+  databaseURL: "https://fluxo-6d716-default-rtdb.firebaseio.com",
+@@ -28,13 +28,14 @@
+
+        const app = initializeApp(firebaseConfig);
+        const database = getDatabase(app);
+        let chartInstance = null;
+
+        const elements = {
+            balanceDiv: document.getElementById('balance'),
+            loading: document.getElementById('loading')
+            loading: document.getElementById('loading'),
+            chartContainer: document.getElementById('chartContainer')
+        };
+
+        // Gera os próximos 24 meses
+        function generateMonths() {
+            const months = [];
+            const today = new Date();
+@@ -46,7 +47,6 @@
+            return months;
+        }
+
+        // Formata o nome do mês
+        function getMonthName(monthString) {
+            const [year, month] = monthString.split('-');
+            const monthNames = [
+@@ -56,7 +56,6 @@
+            return `${monthNames[parseInt(month)-1]}/${year.substring(2)}`;
+        }
+
+        // Carrega dados do Firebase
+        async function loadData() {
+            try {
+                const [categoriesSnap, transactionsSnap] = await Promise.all([
+@@ -75,7 +74,6 @@
+            }
+        }
+
+        // Encontra ou cria transação
+        async function findOrCreateTransaction(categoryId, month) {
+            const transactionsRef = ref(database, 'transactions');
+            const snapshot = await get(transactionsRef);
+@@ -97,21 +95,22 @@
+            return newRef.key;
+        }
+
+        // Manipula edição de célula
+        async function handleCellEdit(categoryId, month, newValue) {
+            try {
+                const amount = parseFloat(newValue.replace(/[^\d,]/g, '').replace(',', '.'));
+                if (isNaN(amount)) throw new Error('Valor inválido');
+
+                let amount = 0;
+                if (newValue.trim() !== '') {
+                    amount = parseFloat(newValue.replace(/[^\d,]/g, '').replace(',', '.'));
+                    if (isNaN(amount)) throw new Error('Valor inválido');
+                }
+                
+                const transactionId = await findOrCreateTransaction(categoryId, month);
+                await update(ref(database, `transactions/${transactionId}`), { amount });
+            } catch (error) {
+                console.error('Erro ao salvar:', error);
+                alert('Digite um valor numérico válido (ex: 1500,50)');
+                alert('Valor definido para 0. Digite um número válido para alterar.');
+            }
+        }
+
+        // Edita categoria
+        async function handleCategoryEdit(catId, currentName, currentType) {
+            const newName = prompt('Novo nome da categoria:', currentName);
+            const newType = prompt('Novo tipo (receita/despesa):', currentType === 'income' ? 'receita' : 'despesa');
+@@ -124,7 +123,6 @@
+            }
+        }
+
+        // Adiciona nova categoria
+        window.addNewCategory = async () => {
+            const name = prompt('Nome da nova categoria:');
+            const type = prompt('Tipo (receita/despesa):').toLowerCase();
+@@ -139,7 +137,6 @@
+            }
+        };
+
+        // Exclui categoria
+        window.deleteCategory = async (catId) => {
+            if (confirm('Excluir categoria e todas as transações relacionadas?')) {
+                await remove(ref(database, `categories/${catId}`));
+@@ -150,9 +147,83 @@
+            }
+        };
+
+        // Renderiza tabela
+        function renderChart(cumulativeData, months) {
+            if (chartInstance) chartInstance.destroy();
+
+            const ctx = document.getElementById('cashflowChart').getContext('2d');
+            
+            chartInstance = new Chart(ctx, {
+                type: 'line',
+                data: {
+                    labels: months.map(m => getMonthName(m)),
+                    datasets: [{
+                        label: 'Saldo Acumulado (R$)',
+                        data: cumulativeData,
+                        borderColor: '#4CAF50',
+                        tension: 0.4,
+                        fill: true,
+                        backgroundColor: 'rgba(76, 175, 80, 0.1)'
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    plugins: {
+                        legend: { position: 'top' },
+                        tooltip: {
+                            callbacks: {
+                                label: (context) => {
+                                    return `Saldo: ${context.raw.toLocaleString('pt-BR', {
+                                        style: 'currency',
+                                        currency: 'BRL'
+                                    })}`;
+                                }
+                            }
+                        }
+                    },
+                    scales: {
+                        y: {
+                            ticks: {
+                                callback: (value) => {
+                                    return value.toLocaleString('pt-BR', {
+                                        style: 'currency',
+                                        currency: 'BRL'
+                                    });
+                                }
+                            }
+                        }
+                    }
+                }
+            });
+        }
+
+        function calculateCumulativeTotals(transactions, categories, months) {
+            let cumulative = 0;
+            const cumulativeData = [];
+            
+            const totals = months.map(month => {
+                const monthlyTotal = Object.values(transactions)
+                    .filter(t => t.month === month)
+                    .reduce((sum, t) => {
+                        const type = categories[t.category]?.type === 'income' ? 1 : -1;
+                        return sum + (t.amount * type);
+                    }, 0);
+                
+                cumulative += monthlyTotal;
+                cumulativeData.push(cumulative);
+                
+                return `
+                    <td class="total-cell ${cumulative >= 0 ? 'positive' : 'negative'}">
+                        ${cumulative.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
+                    </td>
+                `;
+            });
+
+            return { html: totals.join(''), data: cumulativeData };
+        }
+
+        function renderTable(data) {
+            const { categories, transactions, months } = data;
+            const { html: totalsHtml, data: cumulativeData } = calculateCumulativeTotals(transactions, categories, months);
+
+            let html = `
+                <div class="table-container">
+@@ -199,21 +270,20 @@
+                html += `</tr>`;
+            });
+
+            // Linha de saldo acumulado
+            html += `
+                    <tr class="totals-row">
+                        <th class="sticky-col">Saldo Acumulado</th>
+                        ${calculateCumulativeTotals(transactions, categories, months)}
+                        ${totalsHtml}
+                    </tr>
+                </tbody>
+            </table>
+        </div>`;
+
+            elements.balanceDiv.innerHTML = html;
+            elements.chartContainer.innerHTML = '<canvas id="cashflowChart"></canvas>';
+            renderChart(cumulativeData, months);
+
+            // Eventos de edição
+            document.querySelectorAll('.editable-cell').forEach(cell => {
+                // Seleciona todo o texto ao focar
+                cell.addEventListener('focus', (e) => {
+                    const range = document.createRange();
+                    range.selectNodeContents(e.target);
+@@ -222,7 +292,6 @@
+                    sel.addRange(range);
+                });
+
+                // Salva ao sair da célula
+                cell.addEventListener('blur', (e) => {
+                    const categoryId = e.target.dataset.category;
+                    const month = e.target.dataset.month;
+@@ -232,35 +301,13 @@
+            });
+        }
+
+        // Calcula totais cumulativos
+        function calculateCumulativeTotals(transactions, categories, months) {
+            let cumulative = 0;
+            return months.map(month => {
+                const monthlyTotal = Object.values(transactions)
+                    .filter(t => t.month === month)
+                    .reduce((sum, t) => {
+                        const type = categories[t.category]?.type === 'income' ? 1 : -1;
+                        return sum + (t.amount * type);
+                    }, 0);
+                
+                cumulative += monthlyTotal;
+                return `
+                    <td class="total-cell ${cumulative >= 0 ? 'positive' : 'negative'}">
+                        ${cumulative.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
+                    </td>
+                `;
+            }).join('');
+        }
+
+        // Inicialização
+        window.addEventListener('DOMContentLoaded', async () => {
+            try {
+                elements.loading.style.display = 'block';
+                const data = await loadData();
+                renderTable(data);
+                elements.loading.style.display = 'none';
+
+                // Atualizações em tempo real
+                onValue(ref(database, 'categories'), async () => {
+                    const data = await loadData();
+                    renderTable(data);
+@@ -287,14 +334,23 @@
+
+        body {
+            font-family: 'Arial', sans-serif;
+            margin: 20px;
+            color: var(--text-color);
+            margin: 0;
+            padding: 20px;
+            background-color: #f5f6fa;
+        }
+
+        .main-container {
+            max-width: 1200px;
+            margin: 0 auto;
+        }
+
+        .table-container {
+            overflow-x: auto;
+            max-height: 80vh;
+            max-height: 60vh;
+            margin-top: 20px;
+            background: white;
+            border-radius: 8px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+        }
+
+        table {
+@@ -304,7 +360,7 @@
+
+        th, td {
+            padding: 12px;
+            border: 1px solid #ddd;
+            border: 1px solid #eee;
+            text-align: center;
+            min-width: 120px;
+            background-color: var(--sticky-col-bg);
+@@ -322,6 +378,8 @@
+            transform: rotate(180deg);
+            padding: 15px 8px;
+            min-width: 40px;
+            background-color: var(--primary-color);
+            color: white;
+        }
+
+        .category-cell {
+@@ -333,6 +391,7 @@
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 0 10px;
+        }
+
+        .editable-cell {
+@@ -400,11 +459,27 @@
+            background: #219a52;
+            transform: translateY(-2px);
+        }
+
+        .chart-container {
+            margin-top: 40px;
+            padding: 20px;
+            background: white;
+            border-radius: 8px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+        }
+
+        #cashflowChart {
+            max-height: 400px;
+            width: 100% !important;
+        }
+    </style>
+</head>
+<body>
+    <div id="loading">Carregando...</div>
+    <button class="add-category-btn" onclick="addNewCategory()">+ Nova Categoria</button>
+    <div id="balance"></div>
+    <div class="main-container">
+        <button class="add-category-btn" onclick="addNewCategory()">+ Nova Categoria</button>
+        <div id="balance"></div>
+        <div class="chart-container" id="chartContainer"></div>
+    </div>
+</body>
+</html>
