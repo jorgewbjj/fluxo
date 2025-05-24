@@ -1,64 +1,23 @@
 <!DOCTYPE html>
-<html lang="pt-BR">
+<html lang="pt-br">
 <head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
-  <title>Fluxo de Caixa</title>
-  <style>
-    body {
-      font-family: 'Inter', sans-serif;
-      background: #f7f9fb;
-      padding: 2rem;
-      margin: 0;
-      color: #333;
-    }
-    h1 {
-      text-align: center;
-      margin-bottom: 2rem;
-    }
-    .table-container {
-      overflow-x: auto;
-    }
-    table {
-      width: 100%;
-      min-width: 1200px;
-      border-collapse: collapse;
-      background: #fff;
-      box-shadow: 0 2px 8px rgba(0,0,0,0.05);
-      border-radius: 8px;
-    }
-    th, td {
-      padding: 12px 16px;
-      border-bottom: 1px solid #eee;
-      text-align: right;
-    }
-    th:first-child, td:first-child {
-      text-align: left;
-      background: #fafafa;
-      font-weight: bold;
-    }
-    tr:last-child {
-      background: #eef2f5;
-      font-weight: bold;
-    }
-    td[contenteditable="true"] {
-      background: #fefefe;
-      outline: none;
-      cursor: text;
-    }
-    .saldo-negativo {
-      color: red;
-    }
-    .saldo-positivo {
-      color: green;
-    }
-  </style>
+    <meta charset="UTF-8">
+    <title>Gestão Financeira Completa</title>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script type="module">
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/9.22.2/firebase-app.js";
+        import { 
+            getDatabase, 
+            ref, 
+            push, 
+            onValue, 
+            update, 
+            remove,
+            get 
+        } from "https://www.gstatic.com/firebasejs/9.22.2/firebase-database.js";
 
-  <!-- Firebase SDK -->
-  <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js"></script>
-  <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-database.js"></script>
-  <script>
-    const firebaseConfig = {
+        // Configuração do Firebase (substitua com seus dados)
+const firebaseConfig = {
   apiKey: "AIzaSyCgSkYIvenfEzyjef50OD01Ox9et-nyBMo",
   authDomain: "fluxo-6d716.firebaseapp.com",
   databaseURL: "https://fluxo-6d716-default-rtdb.firebaseio.com",
@@ -67,110 +26,418 @@
   messagingSenderId: "761253335013",
   appId: "1:761253335013:web:44c30372a4749203a3690c"
 };
-    firebase.initializeApp(firebaseConfig);
-    const db = firebase.database();
-  </script>
+
+        const app = initializeApp(firebaseConfig);
+        const database = getDatabase(app);
+        let chartInstance = null;
+        let draggedItem = null;
+
+        const elements = {
+            balanceDiv: document.getElementById('balance'),
+            loading: document.getElementById('loading'),
+            chartContainer: document.getElementById('chartContainer')
+        };
+
+        // Funções principais
+        function generateMonths() {
+            const months = [];
+            const today = new Date();
+            today.setDate(1);
+            for(let i = 0; i < 24; i++) {
+                const date = new Date(today.getFullYear(), today.getMonth() + i, 1);
+                months.push(`${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`);
+            }
+            return months;
+        }
+
+        function getMonthName(monthString) {
+            const [year, month] = monthString.split('-');
+            const monthNames = ['Jan', 'Fev', 'Mar', 'Abr', 'Mai', 'Jun', 'Jul', 'Ago', 'Set', 'Out', 'Nov', 'Dez'];
+            return `${monthNames[parseInt(month)-1]}/${year.substring(2)}`;
+        }
+
+        async function loadData() {
+            try {
+                const [categoriesSnap, transactionsSnap] = await Promise.all([
+                    get(ref(database, 'categories')),
+                    get(ref(database, 'transactions'))
+                ]);
+                
+                return {
+                    categories: categoriesSnap.val() || {},
+                    transactions: transactionsSnap.val() || {},
+                    months: generateMonths()
+                };
+            } catch (error) {
+                console.error('Erro ao carregar dados:', error);
+                throw error;
+            }
+        }
+
+        async function handleCellEdit(categoryId, month, newValue) {
+            try {
+                let amount = 0;
+                if (newValue.trim() !== '') {
+                    amount = parseFloat(newValue.replace(/[^\d,]/g, '').replace(',', '.'));
+                    if (isNaN(amount)) throw new Error('Valor inválido');
+                }
+                
+                const transactionId = await findOrCreateTransaction(categoryId, month);
+                await update(ref(database, `transactions/${transactionId}`), { amount });
+            } catch (error) {
+                alert('Valor definido para 0. Digite um número válido (ex: 1500,50)');
+            }
+        }
+
+        async function handleCategoryEdit(catId, currentName, currentType) {
+            const typeMap = { 'income': 'receita', 'expense': 'despesa' };
+            const newName = prompt('Novo nome:', currentName);
+            const newType = prompt('Novo tipo (receita/despesa):', typeMap[currentType]);
+            
+            if (newName && ['receita', 'despesa'].includes(newType.toLowerCase())) {
+                await update(ref(database, `categories/${catId}`), {
+                    name: newName,
+                    type: newType === 'receita' ? 'income' : 'expense'
+                });
+            }
+        }
+
+        window.addNewCategory = async () => {
+            const name = prompt('Nome da categoria:');
+            const type = prompt('Tipo (receita/despesa):').toLowerCase();
+            
+            if (name && ['receita', 'despesa'].includes(type)) {
+                await push(ref(database, 'categories'), { 
+                    name: name.trim(),
+                    type: type === 'receita' ? 'income' : 'expense',
+                    order: Date.now()
+                });
+            } else {
+                alert('Digite valores válidos!');
+            }
+        };
+
+        window.deleteCategory = async (catId) => {
+            if (confirm('Excluir categoria e todas transações?')) {
+                await remove(ref(database, `categories/${catId}`));
+                const transactions = await get(ref(database, 'transactions'));
+                Object.entries(transactions.val() || {}).forEach(async ([key, t]) => {
+                    if (t.category === catId) await remove(ref(database, `transactions/${key}`));
+                });
+            }
+        };
+
+        // Funções de gráfico
+        function renderChart(cumulativeData, months) {
+            if (chartInstance) chartInstance.destroy();
+
+            const ctx = document.getElementById('cashflowChart').getContext('2d');
+            chartInstance = new Chart(ctx, {
+                type: 'line',
+                data: {
+                    labels: months.map(m => getMonthName(m)),
+                    datasets: [{
+                        label: 'Saldo Acumulado (R$)',
+                        data: cumulativeData,
+                        borderColor: '#4CAF50',
+                        tension: 0.4,
+                        fill: true,
+                        backgroundColor: 'rgba(76, 175, 80, 0.1)'
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    plugins: {
+                        legend: { position: 'top' },
+                        tooltip: {
+                            callbacks: {
+                                label: (ctx) => `R$ ${ctx.raw.toFixed(2).replace('.', ',')}`
+                            }
+                        }
+                    },
+                    scales: {
+                        y: {
+                            ticks: {
+                                callback: (value) => `R$ ${value.toFixed(2).replace('.', ',')}`
+                            }
+                        }
+                    }
+                }
+            });
+        }
+
+        // Funções de drag and drop
+        function setupDragAndDrop() {
+            const container = document.querySelector('tbody');
+            
+            container.querySelectorAll('tr').forEach(row => {
+                row.draggable = true;
+                
+                row.addEventListener('dragstart', (e) => {
+                    draggedItem = row;
+                    setTimeout(() => row.classList.add('dragging'), 0);
+                });
+
+                row.addEventListener('dragend', async () => {
+                    row.classList.remove('dragging');
+                    await updateCategoryOrder();
+                });
+
+                row.addEventListener('dragover', (e) => {
+                    e.preventDefault();
+                    const afterElement = getDragAfterElement(container, e.clientY);
+                    draggedItem = draggedItem || row;
+                    
+                    if (afterElement) {
+                        container.insertBefore(draggedItem, afterElement);
+                    } else {
+                        container.appendChild(draggedItem);
+                    }
+                });
+            });
+        }
+
+        async function updateCategoryOrder() {
+            const categoriesRef = ref(database, 'categories');
+            const snapshot = await get(categoriesRef);
+            const categories = snapshot.val() || {};
+            
+            const rows = document.querySelectorAll('tbody tr');
+            const updates = {};
+            
+            rows.forEach((row, index) => {
+                const catId = row.querySelector('td').dataset.categoryId;
+                if (categories[catId]) {
+                    updates[`${catId}/order`] = index;
+                }
+            });
+            
+            await update(ref(database, 'categories'), updates);
+        }
+
+        // Renderização principal
+        function renderTable(data) {
+            const { categories, transactions, months } = data;
+            const sortedCategories = Object.entries(categories).sort((a, b) => (a[1].order || 0) - (b[1].order || 0));
+            let cumulative = 0;
+
+            let html = `
+                <div class="table-container">
+                    <table>
+                        <thead>
+                            <tr>
+                                <th class="sticky-col">Categoria</th>
+                                ${months.map(m => `<th>${getMonthName(m)}</th>`).join('')}
+                            </tr>
+                        </thead>
+                        <tbody>`;
+
+            sortedCategories.forEach(([catId, category]) => {
+                html += `
+                    <tr>
+                        <td class="sticky-col" data-category-id="${catId}">
+                            <div class="category-header">
+                                <span>${category.name}</span>
+                                <div>
+                                    <button onclick="handleCategoryEdit('${catId}', '${category.name}', '${category.type}')">✏️</button>
+                                    <button onclick="deleteCategory('${catId}')">🗑️</button>
+                                </div>
+                            </div>
+                        </td>`;
+
+                months.forEach(month => {
+                    const transaction = Object.values(transactions).find(t => t.category === catId && t.month === month);
+                    const value = transaction?.amount || 0;
+                    html += `
+                        <td class="editable-cell" 
+                            data-category="${catId}"
+                            data-month="${month}"
+                            contenteditable="true"
+                        >${value.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}</td>`;
+                });
+
+                html += `</tr>`;
+            });
+
+            // Cálculo do saldo acumulado
+            const cumulativeData = months.map(month => {
+                const monthlyTotal = Object.values(transactions)
+                    .filter(t => t.month === month)
+                    .reduce((sum, t) => sum + (categories[t.category]?.type === 'income' ? t.amount : -t.amount), 0);
+                cumulative += monthlyTotal;
+                return cumulative;
+            });
+
+            html += `
+                    <tr class="totals-row">
+                        <th class="sticky-col">Saldo Acumulado</th>
+                        ${cumulativeData.map(v => `
+                            <td class="${v >= 0 ? 'positive' : 'negative'}">
+                                ${v.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
+                            </td>
+                        `).join('')}
+                    </tr>
+                </tbody>
+            </table>
+        </div>`;
+
+            elements.balanceDiv.innerHTML = html;
+            elements.chartContainer.innerHTML = '<canvas id="cashflowChart"></canvas>';
+            renderChart(cumulativeData, months);
+            setupDragAndDrop();
+
+            // Eventos de edição
+            document.querySelectorAll('.editable-cell').forEach(cell => {
+                cell.addEventListener('focus', () => {
+                    const range = document.createRange();
+                    range.selectNodeContents(cell);
+                    window.getSelection().removeAllRanges().addRange(range);
+                });
+
+                cell.addEventListener('blur', (e) => {
+                    const categoryId = e.target.dataset.category;
+                    const month = e.target.dataset.month;
+                    handleCellEdit(categoryId, month, e.target.textContent);
+                });
+            });
+        }
+
+        // Inicialização
+        window.addEventListener('DOMContentLoaded', async () => {
+            try {
+                elements.loading.style.display = 'block';
+                const data = await loadData();
+                renderTable(data);
+                
+                onValue(ref(database, 'categories'), async () => renderTable(await loadData()));
+                onValue(ref(database, 'transactions'), async () => renderTable(await loadData()));
+                
+                elements.loading.style.display = 'none';
+            } catch (error) {
+                console.error('Erro inicial:', error);
+                elements.loading.style.display = 'none';
+                alert('Erro ao carregar. Verifique o console.');
+            }
+        });
+    </script>
+    <style>
+        :root {
+            --primary: #2c3e50;
+            --income: #27ae60;
+            --expense: #c0392b;
+            --bg: #f8f9fa;
+        }
+
+        body {
+            font-family: Arial, sans-serif;
+            margin: 20px;
+            background: var(--bg);
+        }
+
+        .table-container {
+            overflow-x: auto;
+            background: white;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+
+        table {
+            border-collapse: collapse;
+            min-width: 800px;
+        }
+
+        th, td {
+            padding: 12px;
+            border: 1px solid #dee2e6;
+            text-align: center;
+            min-width: 120px;
+        }
+
+        .sticky-col {
+            position: sticky;
+            left: 0;
+            background: white;
+            z-index: 1;
+            box-shadow: 2px 0 4px rgba(0,0,0,0.05);
+        }
+
+        .editable-cell {
+            cursor: text;
+            transition: background 0.2s;
+        }
+
+        .editable-cell:focus {
+            background: #fffbe6;
+            outline: 2px solid #ffe082;
+        }
+
+        .category-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 0 8px;
+        }
+
+        button {
+            background: none;
+            border: none;
+            padding: 5px;
+            cursor: pointer;
+            transition: opacity 0.2s;
+        }
+
+        button:hover {
+            opacity: 0.7;
+        }
+
+        .positive { color: var(--income); }
+        .negative { color: var(--expense); }
+
+        .dragging {
+            opacity: 0.5;
+            background: var(--bg) !important;
+        }
+
+        #loading {
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: rgba(255,255,255,0.9);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 1.5rem;
+        }
+
+        .add-category-btn {
+            position: fixed;
+            bottom: 20px;
+            right: 20px;
+            padding: 12px 24px;
+            background: var(--income);
+            color: white;
+            border: none;
+            border-radius: 25px;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+            cursor: pointer;
+            z-index: 1000;
+        }
+
+        #cashflowChart {
+            margin-top: 30px;
+            background: white;
+            border-radius: 8px;
+            padding: 15px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.05);
+        }
+    </style>
 </head>
 <body>
-  <h1>Fluxo de Caixa - 24 Meses</h1>
-  <div class="table-container">
-    <table>
-      <thead>
-        <tr id="header-row">
-          <th>Categoria</th>
-        </tr>
-      </thead>
-      <tbody id="tableBody"></tbody>
-    </table>
-  </div>
-
-  <script>
-    const categorias = ["Receita", "Aluguel", "Salários", "Marketing", "Utilidades", "Outros"];
-    const meses = [...Array(24)].map((_, i) => {
-      const d = new Date();
-      d.setMonth(d.getMonth() + i);
-      return d.toLocaleString('default', { month: 'short', year: '2-digit' });
-    });
-
-    const headerRow = document.getElementById("header-row");
-    const tbody = document.getElementById("tableBody");
-
-    meses.forEach(mes => {
-      const th = document.createElement('th');
-      th.textContent = mes;
-      headerRow.appendChild(th);
-    });
-
-    const linhas = {};
-
-    categorias.forEach(categoria => {
-      const tr = document.createElement('tr');
-      const tdLabel = document.createElement('td');
-      tdLabel.textContent = categoria;
-      tr.appendChild(tdLabel);
-      linhas[categoria] = [];
-
-      meses.forEach((mes, index) => {
-        const td = document.createElement('td');
-        td.contentEditable = true;
-        td.textContent = "0";
-
-        // Salva no Firebase ao editar
-        td.addEventListener('blur', () => {
-          const valor = parseFloat(td.textContent) || 0;
-          db.ref(`fluxo/${categoria}/${mes}`).set(valor);
-        });
-
-        linhas[categoria][index] = td;
-        tr.appendChild(td);
-      });
-
-      tbody.appendChild(tr);
-    });
-
-    // Linha de saldo
-    const trSaldo = document.createElement('tr');
-    const tdSaldoLabel = document.createElement('td');
-    tdSaldoLabel.textContent = "Saldo";
-    trSaldo.appendChild(tdSaldoLabel);
-
-    const saldoCelas = [];
-
-    meses.forEach((mes, index) => {
-      const td = document.createElement('td');
-      td.textContent = "0.00";
-      trSaldo.appendChild(td);
-      saldoCelas[index] = td;
-    });
-
-    tbody.appendChild(trSaldo);
-
-    // Atualiza saldo
-    function atualizarSaldo() {
-      for (let i = 0; i < meses.length; i++) {
-        let saldo = 0;
-        categorias.forEach(cat => {
-          const val = parseFloat(linhas[cat][i].textContent) || 0;
-          saldo += cat === "Receita" ? val : -val;
-        });
-
-        saldoCelas[i].textContent = saldo.toFixed(2);
-        saldoCelas[i].className = saldo < 0 ? 'saldo-negativo' : 'saldo-positivo';
-      }
-    }
-
-    // Carrega do Firebase
-    categorias.forEach(cat => {
-      meses.forEach((mes, i) => {
-        db.ref(`fluxo/${cat}/${mes}`).on('value', snapshot => {
-          const val = snapshot.val();
-          if (val !== null) {
-            linhas[cat][i].textContent = val;
-            atualizarSaldo();
-          }
-        });
-      });
-    });
-  </script>
+    <div id="loading">Carregando...</div>
+    <button class="add-category-btn" onclick="addNewCategory()">+ Nova Categoria</button>
+    <div id="balance"></div>
+    <div id="chartContainer"></div>
 </body>
 </html>
