@@ -15,16 +15,15 @@
             set 
         } from "https://www.gstatic.com/firebasejs/9.22.2/firebase-database.js";
 
-        // Configuração do Firebase (substitua com seus dados)
-const firebaseConfig = {
-  apiKey: "AIzaSyCgSkYIvenfEzyjef50OD01Ox9et-nyBMo",
-  authDomain: "fluxo-6d716.firebaseapp.com",
-  databaseURL: "https://fluxo-6d716-default-rtdb.firebaseio.com",
-  projectId: "fluxo-6d716",
-  storageBucket: "fluxo-6d716.firebasestorage.app",
-  messagingSenderId: "761253335013",
-  appId: "1:761253335013:web:44c30372a4749203a3690c"
-};
+        const firebaseConfig = {
+            apiKey: "SUA_API_KEY",
+            authDomain: "SEU_AUTH_DOMAIN",
+            databaseURL: "SEU_DATABASE_URL",
+            projectId: "SEU_PROJECT_ID",
+            storageBucket: "SEU_STORAGE_BUCKET",
+            messagingSenderId: "SEU_SENDER_ID",
+            appId: "SEU_APP_ID"
+        };
 
         const app = initializeApp(firebaseConfig);
         const database = getDatabase(app);
@@ -76,82 +75,9 @@ const firebaseConfig = {
             }
         }
 
-        // Adicionar categoria
-        window.addCategory = async () => {
-            try {
-                if (!categoryName.value) {
-                    alert('Digite um nome para a categoria');
-                    return;
-                }
+        // [Manter as funções addCategory, editCategory, deleteCategory e addTransaction anteriores]
 
-                await push(ref(database, 'categories'), {
-                    name: categoryName.value,
-                    type: categoryType.value
-                });
-                
-                categoryName.value = '';
-                console.log('Categoria adicionada com sucesso!');
-            } catch (error) {
-                console.error("Erro ao adicionar categoria:", error);
-                alert('Erro ao adicionar categoria!');
-            }
-        }
-
-        // Editar categoria
-        window.editCategory = async (key) => {
-            const newName = prompt('Novo nome da categoria:');
-            if (newName) {
-                try {
-                    await update(ref(database, `categories/${key}`), {
-                        name: newName
-                    });
-                    console.log('Categoria atualizada!');
-                } catch (error) {
-                    console.error("Erro ao editar categoria:", error);
-                    alert('Erro ao editar categoria!');
-                }
-            }
-        }
-
-        // Excluir categoria
-        window.deleteCategory = async (key) => {
-            if (confirm('Tem certeza que deseja excluir esta categoria?')) {
-                try {
-                    await remove(ref(database, `categories/${key}`));
-                    console.log('Categoria excluída!');
-                } catch (error) {
-                    console.error("Erro ao excluir categoria:", error);
-                    alert('Erro ao excluir categoria!');
-                }
-            }
-        }
-
-        // Adicionar transação
-        window.addTransaction = async () => {
-            try {
-                const amount = parseFloat(transactionAmount.value);
-                
-                if (!transactionCategory.value || !amount || !transactionMonth.value) {
-                    alert('Preencha todos os campos da transação');
-                    return;
-                }
-
-                await push(ref(database, 'transactions'), {
-                    category: transactionCategory.value,
-                    amount: transactionCategory.options[transactionCategory.selectedIndex].text.includes('Receita') ? amount : -amount,
-                    month: transactionMonth.value,
-                    date: Date.now()
-                });
-
-                transactionAmount.value = '';
-                console.log('Transação adicionada!');
-            } catch (error) {
-                console.error("Erro ao adicionar transação:", error);
-                alert('Erro ao adicionar transação!');
-            }
-        }
-
-        // Calcular e exibir saldo
+        // Função atualizada para calcular totais por categoria e mês
         function calculateBalance() {
             const transactionsRef = ref(database, 'transactions');
             
@@ -159,11 +85,94 @@ const firebaseConfig = {
                 const transactions = snapshot.val() || {};
                 const categories = await getCategories();
                 
-                const balance = processTransactions(transactions, categories);
-                displayBalance(balance);
+                const { balanceData, months } = processTransactions(transactions, categories);
+                displayCategoryBalance(balanceData, months, categories);
             }, (error) => {
                 console.error("Erro ao carregar transações:", error);
             });
+        }
+
+        function processTransactions(transactions, categories) {
+            const balanceData = {};
+            const months = new Set();
+            
+            // Inicializar estrutura de dados
+            Object.entries(categories).forEach(([catId, cat]) => {
+                balanceData[catId] = {
+                    name: cat.name,
+                    type: cat.type,
+                    months: {}
+                };
+            });
+
+            // Processar transações
+            Object.values(transactions).forEach(transaction => {
+                const month = transaction.month;
+                const catId = transaction.category;
+                const amount = transaction.amount;
+                
+                if (!categories[catId]) return;
+                
+                months.add(month);
+                
+                if (!balanceData[catId].months[month]) {
+                    balanceData[catId].months[month] = 0;
+                }
+                
+                balanceData[catId].months[month] += amount;
+            });
+
+            return {
+                balanceData,
+                months: Array.from(months).sort()
+            };
+        }
+
+        function displayCategoryBalance(balanceData, months, categories) {
+            let html = '<h3>Totais por Categoria e Mês</h3>';
+            html += '<div class="table-container"><table>';
+            
+            // Cabeçalho com meses
+            html += '<tr><th>Categoria</th>';
+            months.forEach(month => {
+                html += `<th>${month}</th>`;
+            });
+            html += '<th>Total</th></tr>';
+            
+            // Linhas de categorias
+            Object.entries(balanceData).forEach(([catId, category]) => {
+                html += `<tr><td>${category.name} (${category.type})</td>`;
+                
+                let total = 0;
+                months.forEach(month => {
+                    const value = category.months[month] || 0;
+                    total += value;
+                    html += `<td class="${value < 0 ? 'negative' : 'positive'}">${formatCurrency(value)}</td>`;
+                });
+                
+                html += `<td class="${total < 0 ? 'negative' : 'positive'}">${formatCurrency(total)}</td></tr>`;
+            });
+            
+            // Linha de totais
+            html += '<tr><th>Total</th>';
+            let grandTotals = {};
+            months.forEach(month => {
+                grandTotals[month] = 0;
+                Object.values(balanceData).forEach(category => {
+                    grandTotals[month] += category.months[month] || 0;
+                });
+                html += `<td class="${grandTotals[month] < 0 ? 'negative' : 'positive'}">${formatCurrency(grandTotals[month])}</td>`;
+            });
+            
+            const grandTotal = Object.values(grandTotals).reduce((a, b) => a + b, 0);
+            html += `<td class="${grandTotal < 0 ? 'negative' : 'positive'}">${formatCurrency(grandTotal)}</td></tr>`;
+            
+            html += '</table></div>';
+            balanceDiv.innerHTML = html;
+        }
+
+        function formatCurrency(value) {
+            return `R$ ${Math.abs(value).toFixed(2)}`;
         }
 
         async function getCategories() {
@@ -171,97 +180,40 @@ const firebaseConfig = {
             return snapshot.val() || {};
         }
 
-        function processTransactions(transactions, categories) {
-            const balance = {};
-            
-            Object.values(transactions).forEach(transaction => {
-                const month = transaction.month;
-                const category = categories[transaction.category];
-                
-                if (!balance[month]) {
-                    balance[month] = {
-                        income: 0,
-                        expense: 0,
-                        total: 0
-                    };
-                }
-
-                if (category?.type === 'income') {
-                    balance[month].income += Math.abs(transaction.amount);
-                } else {
-                    balance[month].expense += Math.abs(transaction.amount);
-                }
-
-                balance[month].total = balance[month].income - balance[month].expense;
-            });
-            
-            return balance;
-        }
-
-        function displayBalance(balance) {
-            let html = '<table><tr><th>Mês</th><th>Receitas</th><th>Despesas</th><th>Saldo</th></tr>';
-            
-            Object.entries(balance).sort((a, b) => b[0].localeCompare(a[0])).forEach(([month, values]) => {
-                html += `
-                    <tr>
-                        <td>${month}</td>
-                        <td>R$ ${values.income.toFixed(2)}</td>
-                        <td>R$ ${values.expense.toFixed(2)}</td>
-                        <td class="${values.total >= 0 ? 'positive' : 'negative'}">
-                            R$ ${values.total.toFixed(2)}
-                        </td>
-                    </tr>
-                `;
-            });
-            
-            html += '</table>';
-            balanceDiv.innerHTML = html;
-        }
-
-        // Inicialização
-        window.addEventListener('DOMContentLoaded', () => {
-            loadCategories();
-            calculateBalance();
-        });
+        // [Manter o restante das funções e inicialização anteriores]
 
     </script>
     <style>
-        body { font-family: Arial, sans-serif; margin: 20px; }
-        .container { max-width: 800px; margin: 0 auto; }
-        .section { margin-bottom: 30px; border: 1px solid #ccc; padding: 20px; border-radius: 5px; }
-        input, select, button { margin: 5px; padding: 8px; }
-        table { width: 100%; border-collapse: collapse; margin-top: 10px; }
-        th, td { border: 1px solid #ddd; padding: 8px; text-align: left; }
-        .positive { color: green; }
-        .negative { color: red; }
-        .category-item { margin: 5px 0; padding: 5px; border-bottom: 1px solid #eee; }
+        /* Estilos anteriores e novos adicionais */
+        .table-container {
+            overflow-x: auto;
+            max-width: 100%;
+        }
+        
+        table {
+            min-width: 600px;
+        }
+        
+        th, td {
+            min-width: 100px;
+            text-align: right;
+        }
+        
+        td:first-child {
+            text-align: left;
+            font-weight: bold;
+        }
+        
+        .positive {
+            color: green;
+        }
+        
+        .negative {
+            color: red;
+        }
     </style>
 </head>
 <body>
-    <div class="container">
-        <div class="section">
-            <h2>Gerenciar Categorias</h2>
-            <input type="text" id="categoryName" placeholder="Nova categoria">
-            <select id="categoryType">
-                <option value="income">Receita</option>
-                <option value="expense">Despesa</option>
-            </select>
-            <button onclick="addCategory()">Adicionar Categoria</button>
-            <div id="categoriesList"></div>
-        </div>
-
-        <div class="section">
-            <h2>Adicionar Transação</h2>
-            <select id="transactionCategory"></select>
-            <input type="number" id="transactionAmount" placeholder="Valor">
-            <input type="month" id="transactionMonth">
-            <button onclick="addTransaction()">Adicionar</button>
-        </div>
-
-        <div class="section">
-            <h2>Saldo Mensal</h2>
-            <div id="balance"></div>
-        </div>
-    </div>
+    <!-- Manter a mesma estrutura HTML anterior -->
 </body>
 </html>
