@@ -1,9 +1,8 @@
-
 <!DOCTYPE html>
 <html lang="pt-br">
 <head>
     <meta charset="UTF-8">
-    <title>Fluxo de Caixa Editável</title>
+    <title>Fluxo de Caixa Completo</title>
     <script type="module">
         import { initializeApp } from "https://www.gstatic.com/firebasejs/9.22.2/firebase-app.js";
         import { 
@@ -16,7 +15,7 @@
             get 
         } from "https://www.gstatic.com/firebasejs/9.22.2/firebase-database.js";
 
-
+        // Configuração do Firebase (substitua pelos seus dados)
 const firebaseConfig = {
   apiKey: "AIzaSyCgSkYIvenfEzyjef50OD01Ox9et-nyBMo",
   authDomain: "fluxo-6d716.firebaseapp.com",
@@ -35,6 +34,7 @@ const firebaseConfig = {
             loading: document.getElementById('loading')
         };
 
+        // Gera os próximos 24 meses
         function generateMonths() {
             const months = [];
             const today = new Date();
@@ -46,6 +46,7 @@ const firebaseConfig = {
             return months;
         }
 
+        // Formata o nome do mês
         function getMonthName(monthString) {
             const [year, month] = monthString.split('-');
             const monthNames = [
@@ -55,7 +56,8 @@ const firebaseConfig = {
             return `${monthNames[parseInt(month)-1]}/${year.substring(2)}`;
         }
 
-        async function processFinancialData() {
+        // Carrega dados do Firebase
+        async function loadData() {
             try {
                 const [categoriesSnap, transactionsSnap] = await Promise.all([
                     get(ref(database, 'categories')),
@@ -68,11 +70,12 @@ const firebaseConfig = {
                     months: generateMonths()
                 };
             } catch (error) {
-                console.error('Erro ao processar dados:', error);
+                console.error('Erro ao carregar dados:', error);
                 throw error;
             }
         }
 
+        // Encontra ou cria transação
         async function findOrCreateTransaction(categoryId, month) {
             const transactionsRef = ref(database, 'transactions');
             const snapshot = await get(transactionsRef);
@@ -94,6 +97,7 @@ const firebaseConfig = {
             return newRef.key;
         }
 
+        // Manipula edição de célula
         async function handleCellEdit(categoryId, month, newValue) {
             try {
                 const amount = parseFloat(newValue.replace(/[^\d,]/g, '').replace(',', '.'));
@@ -107,18 +111,46 @@ const firebaseConfig = {
             }
         }
 
+        // Edita categoria
         async function handleCategoryEdit(catId, currentName, currentType) {
             const newName = prompt('Novo nome da categoria:', currentName);
-            const newType = prompt('Novo tipo (income/expense):', currentType);
+            const newType = prompt('Novo tipo (receita/despesa):', currentType === 'income' ? 'receita' : 'despesa');
             
-            if (newName && newType && ['income', 'expense'].includes(newType)) {
+            if (newName && newType && ['receita', 'despesa'].includes(newType.toLowerCase())) {
                 await update(ref(database, `categories/${catId}`), {
                     name: newName,
-                    type: newType
+                    type: newType === 'receita' ? 'income' : 'expense'
                 });
             }
         }
 
+        // Adiciona nova categoria
+        window.addNewCategory = async () => {
+            const name = prompt('Nome da nova categoria:');
+            const type = prompt('Tipo (receita/despesa):').toLowerCase();
+            
+            if (name && (type === 'receita' || type === 'despesa')) {
+                await push(ref(database, 'categories'), { 
+                    name: name.trim(),
+                    type: type === 'receita' ? 'income' : 'expense'
+                });
+            } else {
+                alert('Dados inválidos! Use "receita" ou "despesa" para o tipo.');
+            }
+        };
+
+        // Exclui categoria
+        window.deleteCategory = async (catId) => {
+            if (confirm('Excluir categoria e todas as transações relacionadas?')) {
+                await remove(ref(database, `categories/${catId}`));
+                const transactions = await get(ref(database, 'transactions'));
+                Object.entries(transactions.val() || {}).forEach(async ([key, t]) => {
+                    if (t.category === catId) await remove(ref(database, `transactions/${key}`));
+                });
+            }
+        };
+
+        // Renderiza tabela
         function renderTable(data) {
             const { categories, transactions, months } = data;
             
@@ -135,8 +167,7 @@ const firebaseConfig = {
                                 `).join('')}
                             </tr>
                         </thead>
-                        <tbody>
-            `;
+                        <tbody>`;
 
             Object.entries(categories).forEach(([catId, category]) => {
                 html += `
@@ -149,8 +180,7 @@ const firebaseConfig = {
                                     <button onclick="deleteCategory('${catId}')">🗑️</button>
                                 </div>
                             </div>
-                        </td>
-                `;
+                        </td>`;
 
                 months.forEach(month => {
                     const transaction = Object.values(transactions).find(t => 
@@ -163,14 +193,13 @@ const firebaseConfig = {
                             data-category="${catId}"
                             data-month="${month}"
                             contenteditable="true"
-                        >${value.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}</td>
-                    `;
+                        >${value.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}</td>`;
                 });
 
                 html += `</tr>`;
             });
 
-            // Linha de totais cumulativos
+            // Linha de saldo acumulado
             html += `
                     <tr class="totals-row">
                         <th class="sticky-col">Saldo Acumulado</th>
@@ -182,7 +211,18 @@ const firebaseConfig = {
 
             elements.balanceDiv.innerHTML = html;
 
+            // Eventos de edição
             document.querySelectorAll('.editable-cell').forEach(cell => {
+                // Seleciona todo o texto ao focar
+                cell.addEventListener('focus', (e) => {
+                    const range = document.createRange();
+                    range.selectNodeContents(e.target);
+                    const sel = window.getSelection();
+                    sel.removeAllRanges();
+                    sel.addRange(range);
+                });
+
+                // Salva ao sair da célula
                 cell.addEventListener('blur', (e) => {
                     const categoryId = e.target.dataset.category;
                     const month = e.target.dataset.month;
@@ -192,6 +232,7 @@ const firebaseConfig = {
             });
         }
 
+        // Calcula totais cumulativos
         function calculateCumulativeTotals(transactions, categories, months) {
             let cumulative = 0;
             return months.map(month => {
@@ -204,39 +245,29 @@ const firebaseConfig = {
                 
                 cumulative += monthlyTotal;
                 return `
-                    <td class="total-cell">
+                    <td class="total-cell ${cumulative >= 0 ? 'positive' : 'negative'}">
                         ${cumulative.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
                     </td>
                 `;
             }).join('');
         }
 
-        window.deleteCategory = async (catId) => {
-            if (confirm('Excluir categoria e todas as transações relacionadas?')) {
-                await remove(ref(database, `categories/${catId}`));
-                const transactions = await get(ref(database, 'transactions'));
-                Object.entries(transactions.val() || {}).forEach(async ([key, t]) => {
-                    if (t.category === catId) await remove(ref(database, `transactions/${key}`));
-                });
-            }
-        };
-
-        window.handleCategoryEdit = handleCategoryEdit;
-
+        // Inicialização
         window.addEventListener('DOMContentLoaded', async () => {
             try {
                 elements.loading.style.display = 'block';
-                const data = await processFinancialData();
+                const data = await loadData();
                 renderTable(data);
                 elements.loading.style.display = 'none';
                 
+                // Atualizações em tempo real
                 onValue(ref(database, 'categories'), async () => {
-                    const data = await processFinancialData();
+                    const data = await loadData();
                     renderTable(data);
                 });
                 
                 onValue(ref(database, 'transactions'), async () => {
-                    const data = await processFinancialData();
+                    const data = await loadData();
                     renderTable(data);
                 });
             } catch (error) {
@@ -250,6 +281,8 @@ const firebaseConfig = {
             --primary-color: #2c3e50;
             --text-color: #333;
             --sticky-col-bg: #ffffff;
+            --income-color: #27ae60;
+            --expense-color: #c0392b;
         }
 
         body {
@@ -304,21 +337,25 @@ const firebaseConfig = {
 
         .editable-cell {
             cursor: cell;
-            transition: background 0.2s;
+            transition: all 0.2s;
         }
 
         .editable-cell:focus {
-            background: #f0f8ff;
-            outline: 2px solid var(--primary-color);
+            background: #fff;
+            box-shadow: 0 0 0 2px var(--primary-color);
+            outline: none;
         }
 
-        .income { border-left: 4px solid #4CAF50; }
-        .expense { border-left: 4px solid #F44336; }
+        .income { border-left: 4px solid var(--income-color); }
+        .expense { border-left: 4px solid var(--expense-color); }
 
         .totals-row {
             background-color: #f8f9fa;
             font-weight: bold;
         }
+
+        .positive { color: var(--income-color); }
+        .negative { color: var(--expense-color); }
 
         button {
             background: none;
@@ -344,10 +381,30 @@ const firebaseConfig = {
             align-items: center;
             font-size: 24px;
         }
+
+        .add-category-btn {
+            position: fixed;
+            bottom: 20px;
+            right: 20px;
+            padding: 15px 25px;
+            background: var(--income-color);
+            color: white;
+            border: none;
+            border-radius: 25px;
+            cursor: pointer;
+            box-shadow: 0 4px 8px rgba(0,0,0,0.2);
+            z-index: 1000;
+        }
+
+        .add-category-btn:hover {
+            background: #219a52;
+            transform: translateY(-2px);
+        }
     </style>
 </head>
 <body>
     <div id="loading">Carregando...</div>
+    <button class="add-category-btn" onclick="addNewCategory()">+ Nova Categoria</button>
     <div id="balance"></div>
 </body>
 </html>
