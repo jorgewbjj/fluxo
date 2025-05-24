@@ -24,6 +24,13 @@
           </tr>
         </thead>
         <tbody id="table-body"></tbody>
+        <tfoot class="bg-gray-100 font-semibold text-sm">
+          <tr id="saldo-row">
+            <td class="py-2 px-4">Saldo</td>
+            <td></td>
+            <!-- Saldos mensais inseridos via JS -->
+          </tr>
+        </tfoot>
       </table>
     </div>
 
@@ -55,6 +62,7 @@ const firebaseConfig = {
     }
 
     const headerRow = document.getElementById("header-row");
+    const saldoRow = document.getElementById("saldo-row");
     const tableBody = document.getElementById("table-body");
     const addBtn = document.getElementById("add-category");
     const chartCtx = document.getElementById("cashflowChart").getContext("2d");
@@ -65,34 +73,37 @@ const firebaseConfig = {
       th.className = "py-3 px-4 text-center";
       th.innerText = month;
       headerRow.appendChild(th);
+
+      const saldoTd = document.createElement("td");
+      saldoTd.className = "text-center py-2 px-4";
+      saldoTd.setAttribute("data-month", month);
+      saldoRow.appendChild(saldoTd);
     });
 
+    function updateSaldoRow(saldos) {
+      months.forEach(month => {
+        const td = saldoRow.querySelector(`[data-month='${month}']`);
+        td.innerText = saldos[month]?.toFixed(2) || "0.00";
+      });
+    }
+
     function renderChart(data) {
-      const receitas = months.map(month => data.receitas[month] || 0);
-      const despesas = months.map(month => data.despesas[month] || 0);
-      const saldos = months.map((_, i) => receitas[i] - despesas[i]);
+      const saldos = months.map(month => data.saldos[month] || 0);
 
       if (chart) chart.destroy();
 
       chart = new Chart(chartCtx, {
-        type: 'bar',
+        type: 'line',
         data: {
           labels: months,
           datasets: [
             {
-              label: 'Receitas',
-              data: receitas,
-              backgroundColor: 'rgba(34,197,94,0.6)'
-            },
-            {
-              label: 'Despesas',
-              data: despesas,
-              backgroundColor: 'rgba(239,68,68,0.6)'
-            },
-            {
-              label: 'Saldo',
+              label: 'Saldo Mensal',
               data: saldos,
-              backgroundColor: 'rgba(59,130,246,0.6)'
+              borderColor: 'rgba(59,130,246,1)',
+              backgroundColor: 'rgba(59,130,246,0.2)',
+              fill: true,
+              tension: 0.4
             }
           ]
         },
@@ -100,7 +111,7 @@ const firebaseConfig = {
           responsive: true,
           plugins: {
             legend: { position: 'top' },
-            title: { display: true, text: 'Resumo Mensal' }
+            title: { display: true, text: 'Saldo Mensal nos Próximos 24 Meses' }
           }
         }
       });
@@ -174,6 +185,7 @@ const firebaseConfig = {
         const categories = data.categories || {};
         const receitas = {};
         const despesas = {};
+        const saldos = {};
 
         months.forEach(month => {
           receitas[month] = 0;
@@ -189,7 +201,12 @@ const firebaseConfig = {
           });
         });
 
-        renderChart({ receitas, despesas });
+        months.forEach(month => {
+          saldos[month] = receitas[month] - despesas[month];
+        });
+
+        updateSaldoRow(saldos);
+        renderChart({ saldos });
       });
     }
   </script>
