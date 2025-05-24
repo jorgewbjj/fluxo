@@ -1,63 +1,46 @@
 <!DOCTYPE html>
-<html lang="pt-br">
+<html lang="pt-BR">
 <head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Fluxo de Caixa Avançado</title>
-  <script src="https://cdn.tailwindcss.com"></script>
+  <meta charset="UTF-8">
+  <title>Fluxo de Caixa - Firebase</title>
+  <style>
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      margin-top: 10px;
+    }
+    th, td {
+      border: 1px solid #ccc;
+      padding: 5px;
+      text-align: center;
+    }
+    td[contenteditable="true"] {
+      background-color: #f9f9f9;
+    }
+    .category-controls button {
+      margin-left: 4px;
+    }
+    .total-row {
+      background-color: #eaeaea;
+      font-weight: bold;
+    }
+  </style>
+</head>
+<body>
+
+  <h2>Fluxo de Caixa</h2>
+  <button onclick="addCategory()">+ Adicionar Categoria</button>
+  <table id="cashflowTable">
+    <thead id="tableHead"></thead>
+    <tbody id="tableBody"></tbody>
+  </table>
+
+  <!-- Firebase SDK -->
   <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-database-compat.js"></script>
-  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
-</head>
-<body class="bg-gray-50 text-gray-800 font-sans">
-  <div class="max-w-7xl mx-auto p-6">
-    <h1 class="text-3xl font-bold mb-6 text-center">Fluxo de Caixa com Firebase</h1>
-    <button id="add-category" class="mb-4 bg-blue-600 text-white px-4 py-2 rounded hover:bg-blue-700">+ Adicionar Categoria</button>
-
-    <div class="overflow-auto shadow-lg rounded-lg bg-white mb-6">
-      <table class="min-w-full text-sm text-gray-700" id="cashflow-table">
-        <thead class="bg-gray-200 text-gray-600 uppercase text-xs">
-          <tr id="header-row">
-            <th class="py-3 px-4 text-left">Categoria</th>
-            <!-- Meses adicionados via JS -->
-          </tr>
-        </thead>
-        <tbody id="table-body"></tbody>
-        <tfoot class="bg-gray-100 font-semibold text-sm">
-          <tr id="saldo-row">
-            <td class="py-2 px-4">Saldo</td>
-            <!-- Saldos mensais inseridos via JS -->
-          </tr>
-        </tfoot>
-      </table>
-    </div>
-
-    <div class="mb-6">
-      <canvas id="cashflowChart"></canvas>
-    </div>
-  </div>
-
-  <!-- Modal -->
-  <div id="category-modal" class="fixed inset-0 flex items-center justify-center bg-black bg-opacity-50 hidden">
-    <div class="bg-white rounded-lg p-6 shadow-lg max-w-sm w-full">
-      <h2 class="text-lg font-semibold mb-4">Nova Categoria</h2>
-      <label class="block mb-2">Nome:
-        <input id="new-category-name" type="text" class="w-full border px-3 py-2 rounded mt-1">
-      </label>
-      <label class="block mb-4">Tipo:
-        <select id="new-category-type" class="w-full border px-3 py-2 rounded mt-1">
-          <option value="Receita">Receita</option>
-          <option value="Despesa">Despesa</option>
-        </select>
-      </label>
-      <div class="text-right">
-        <button id="cancel-modal" class="mr-2 px-4 py-2 rounded bg-gray-300 hover:bg-gray-400">Cancelar</button>
-        <button id="save-category" class="px-4 py-2 rounded bg-blue-600 text-white hover:bg-blue-700">Salvar</button>
-      </div>
-    </div>
-  </div>
 
   <script>
+    // 🔁 Substitua com suas credenciais do Firebase:
 const firebaseConfig = {
   apiKey: "AIzaSyCgSkYIvenfEzyjef50OD01Ox9et-nyBMo",
   authDomain: "fluxo-6d716.firebaseapp.com",
@@ -70,161 +53,109 @@ const firebaseConfig = {
 
     firebase.initializeApp(firebaseConfig);
     const db = firebase.database();
+    const tableRef = db.ref("cashflow");
 
-    const monthNames = ["Jan", "Fev", "Mar", "Abr", "Mai", "Jun", "Jul", "Ago", "Set", "Out", "Nov", "Dez"];
-    const months = [];
-    let now = new Date();
-    for (let i = 0; i < 24; i++) {
-      months.push(`${monthNames[now.getMonth()]}/${now.getFullYear().toString().slice(-2)}`);
-      now.setMonth(now.getMonth() + 1);
-    }
-
-    const headerRow = document.getElementById("header-row");
-    const saldoRow = document.getElementById("saldo-row");
-    const tableBody = document.getElementById("table-body");
-    const addBtn = document.getElementById("add-category");
-    const chartCtx = document.getElementById("cashflowChart").getContext("2d");
-
-    const modal = document.getElementById("category-modal");
-    const cancelModal = document.getElementById("cancel-modal");
-    const saveCategory = document.getElementById("save-category");
-    const newCategoryName = document.getElementById("new-category-name");
-    const newCategoryType = document.getElementById("new-category-type");
-
-    let chart;
-
-    months.forEach(month => {
-      const th = document.createElement("th");
-      th.className = "py-3 px-4 text-center";
-      th.innerText = month;
-      headerRow.appendChild(th);
-
-      const saldoTd = document.createElement("td");
-      saldoTd.className = "text-center py-2 px-4";
-      saldoTd.setAttribute("data-month", month);
-      saldoRow.appendChild(saldoTd);
+    const months = Array.from({ length: 24 }, (_, i) => {
+      const date = new Date();
+      date.setMonth(date.getMonth() + i);
+      return date.toLocaleDateString('pt-BR', { month: 'short', year: 'numeric' });
     });
 
-    function updateSaldoRow(saldos) {
-      months.forEach(month => {
-        const td = saldoRow.querySelector(`[data-month='${month}']`);
-        td.innerText = saldos[month]?.toFixed(2) || "0.00";
-      });
-    }
+    function renderTable(data = {}) {
+      const head = document.getElementById("tableHead");
+      const body = document.getElementById("tableBody");
+      head.innerHTML = '';
+      body.innerHTML = '';
 
-    function renderChart(data) {
-      const saldos = months.map(month => data.saldos[month] || 0);
-
-      if (chart) chart.destroy();
-
-      chart = new Chart(chartCtx, {
-        type: 'line',
-        data: {
-          labels: months,
-          datasets: [
-            {
-              label: 'Saldo Mensal',
-              data: saldos,
-              borderColor: 'rgba(59,130,246,1)',
-              backgroundColor: 'rgba(59,130,246,0.2)',
-              fill: true,
-              tension: 0.4
-            }
-          ]
-        },
-        options: {
-          responsive: true,
-          plugins: {
-            legend: { position: 'top' },
-            title: { display: true, text: 'Saldo Mensal nos Próximos 24 Meses' }
-          }
-        }
-      });
-    }
-
-    function renderCategoryRow(categoryId, data = {}) {
+      // Cabeçalho
       const tr = document.createElement("tr");
+      tr.innerHTML = `<th>Categoria</th>` + months.map(m => `<th>${m}</th>`).join('');
+      head.appendChild(tr);
 
-      const nameCell = document.createElement("td");
-      nameCell.className = "py-2 px-4 border font-medium bg-gray-50";
-      nameCell.innerText = data.name || "Nova Categoria";
-      tr.appendChild(nameCell);
+      // Soma para cada coluna
+      const totals = new Array(months.length).fill(0);
 
-      months.forEach(month => {
-        const td = document.createElement("td");
-        td.className = "border text-center py-2 px-4 hover:bg-yellow-50";
-        td.contentEditable = true;
+      // Corpo
+      Object.entries(data).forEach(([categoryKey, categoryData], index) => {
+        const tr = document.createElement("tr");
+        tr.innerHTML = `
+          <td contenteditable="true" onblur="editCategoryName('${categoryKey}', this.innerText)">
+            ${categoryData.name || ''}
+            <span class="category-controls">
+              <button onclick="moveCategory('${categoryKey}', -1)">⬆️</button>
+              <button onclick="moveCategory('${categoryKey}', 1)">⬇️</button>
+              <button onclick="deleteCategory('${categoryKey}')">🗑️</button>
+            </span>
+          </td>
+        `;
 
-        db.ref(`cashflow/values/${categoryId}/${month}`).once("value", snapshot => {
-          td.innerText = snapshot.val() || "";
+        months.forEach((month, mIndex) => {
+          const cellValue = categoryData.values?.[mIndex] || '';
+          const value = parseFloat(cellValue.replace(',', '.')) || 0;
+          totals[mIndex] += value;
+
+          const td = document.createElement("td");
+          td.contentEditable = true;
+          td.innerText = cellValue;
+          td.onblur = () => {
+            tableRef.child(`${categoryKey}/values/${mIndex}`).set(td.innerText);
+          };
+          tr.appendChild(td);
         });
 
-        td.addEventListener("blur", () => {
-          const value = parseFloat(td.innerText.trim()) || 0;
-          db.ref(`cashflow/values/${categoryId}/${month}`).set(value);
-          loadAndRenderChart();
-        });
-
-        tr.appendChild(td);
+        body.appendChild(tr);
       });
 
-      tableBody.appendChild(tr);
+      // Linha de Totais
+      const totalRow = document.createElement("tr");
+      totalRow.classList.add("total-row");
+      totalRow.innerHTML = `<td>Total</td>` +
+        totals.map(t => `<td>${t.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</td>`).join('');
+      body.appendChild(totalRow);
     }
 
-    function loadAndRenderChart() {
-      db.ref("cashflow").once("value", snapshot => {
-        const data = snapshot.val() || {};
-        const values = data.values || {};
-        const categories = data.categories || {};
-        const saldos = {};
+    function addCategory() {
+      const newCategoryRef = tableRef.push();
+      newCategoryRef.set({ name: "Nova Categoria", values: {} });
+    }
 
-        months.forEach(month => {
-          saldos[month] = 0;
+    function editCategoryName(key, newName) {
+      tableRef.child(`${key}/name`).set(newName.trim());
+    }
+
+    function deleteCategory(key) {
+      if (confirm("Tem certeza que deseja excluir esta categoria?")) {
+        tableRef.child(key).remove();
+      }
+    }
+
+    function moveCategory(key, direction) {
+      tableRef.once("value", snapshot => {
+        const data = snapshot.val();
+        if (!data) return;
+
+        const keys = Object.keys(data);
+        const index = keys.indexOf(key);
+        const newIndex = index + direction;
+        if (newIndex < 0 || newIndex >= keys.length) return;
+
+        const reordered = [...keys];
+        [reordered[index], reordered[newIndex]] = [reordered[newIndex], reordered[index]];
+
+        const updates = {};
+        reordered.forEach(k => {
+          updates[k] = data[k];
         });
 
-        Object.entries(values).forEach(([catId, meses]) => {
-          const tipo = categories[catId]?.type || "Receita";
-          months.forEach(month => {
-            const val = parseFloat(meses[month]) || 0;
-            saldos[month] += (tipo === "Despesa" ? -val : val);
-          });
-        });
-
-        updateSaldoRow(saldos);
-        renderChart({ saldos });
+        tableRef.set(updates);
       });
     }
 
-    db.ref("cashflow/categories").once("value", snapshot => {
-      const categories = snapshot.val() || {};
-      Object.keys(categories).forEach(id => {
-        renderCategoryRow(id, categories[id]);
-      });
-      loadAndRenderChart();
-    });
-
-    addBtn.addEventListener("click", () => {
-      modal.classList.remove("hidden");
-      newCategoryName.value = "";
-      newCategoryType.value = "Receita";
-    });
-
-    cancelModal.addEventListener("click", () => {
-      modal.classList.add("hidden");
-    });
-
-    saveCategory.addEventListener("click", () => {
-      const name = newCategoryName.value.trim();
-      const type = newCategoryType.value;
-      if (!name) return;
-
-      const newId = db.ref().child("cashflow/categories").push().key;
-      const newData = { name, type };
-      db.ref(`cashflow/categories/${newId}`).set(newData);
-      renderCategoryRow(newId, newData);
-      modal.classList.add("hidden");
-      loadAndRenderChart();
+    tableRef.on("value", snapshot => {
+      const data = snapshot.val() || {};
+      renderTable(data);
     });
   </script>
+
 </body>
 </html>
