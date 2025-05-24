@@ -110,27 +110,31 @@ const firebaseConfig = {
       });
     }
 
-    function renderChart(saldos) {
-      const data = months.map(month => saldos[month] || 0);
+    function renderChart(data) {
+      const saldos = months.map(month => data.saldos[month] || 0);
+
       if (chart) chart.destroy();
+
       chart = new Chart(chartCtx, {
         type: 'line',
         data: {
           labels: months,
-          datasets: [{
-            label: 'Saldo Mensal',
-            data: data,
-            borderColor: 'rgba(59,130,246,1)',
-            backgroundColor: 'rgba(59,130,246,0.2)',
-            fill: true,
-            tension: 0.4
-          }]
+          datasets: [
+            {
+              label: 'Saldo Mensal Acumulado',
+              data: saldos,
+              borderColor: 'rgba(59,130,246,1)',
+              backgroundColor: 'rgba(59,130,246,0.2)',
+              fill: true,
+              tension: 0.4
+            }
+          ]
         },
         options: {
           responsive: true,
           plugins: {
             legend: { position: 'top' },
-            title: { display: true, text: 'Saldo Mensal nos Próximos 24 Meses' }
+            title: { display: true, text: 'Saldo Acumulado nos Próximos 24 Meses' }
           }
         }
       });
@@ -138,6 +142,7 @@ const firebaseConfig = {
 
     function renderCategoryRow(categoryId, data = {}) {
       const tr = document.createElement("tr");
+
       const nameCell = document.createElement("td");
       nameCell.className = "py-2 px-4 border font-medium bg-gray-50";
       nameCell.innerText = data.name || "Nova Categoria";
@@ -172,7 +177,6 @@ const firebaseConfig = {
         const receitas = {};
         const despesas = {};
         const saldos = {};
-        let saldoAcumulado = 0;
 
         months.forEach(month => {
           receitas[month] = 0;
@@ -188,14 +192,15 @@ const firebaseConfig = {
           });
         });
 
+        let acumulado = 0;
         months.forEach(month => {
-          const saldoMensal = receitas[month] - despesas[month];
-          saldoAcumulado += saldoMensal;
-          saldos[month] = saldoAcumulado;
+          const resultadoMes = receitas[month] - despesas[month];
+          acumulado += resultadoMes;
+          saldos[month] = acumulado;
         });
 
         updateSaldoRow(saldos);
-        renderChart(saldos);
+        renderChart({ saldos });
       });
     }
 
