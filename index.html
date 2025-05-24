@@ -3,8 +3,228 @@
 <head>
     <meta charset="UTF-8">
     <title>Controle Financeiro</title>
-    <script src="https://www.gstatic.com/firebasejs/8.10.0/firebase-app.js"></script>
-    <script src="https://www.gstatic.com/firebasejs/8.10.0/firebase-database.js"></script>
+    <script type="module">
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/9.22.2/firebase-app.js";
+        import { 
+            getDatabase, 
+            ref, 
+            push, 
+            onValue, 
+            update, 
+            remove,
+            set 
+        } from "https://www.gstatic.com/firebasejs/9.22.2/firebase-database.js";
+
+        // Configuração do Firebase (substitua com seus dados)
+const firebaseConfig = {
+  apiKey: "AIzaSyCgSkYIvenfEzyjef50OD01Ox9et-nyBMo",
+  authDomain: "fluxo-6d716.firebaseapp.com",
+  databaseURL: "https://fluxo-6d716-default-rtdb.firebaseio.com",
+  projectId: "fluxo-6d716",
+  storageBucket: "fluxo-6d716.firebasestorage.app",
+  messagingSenderId: "761253335013",
+  appId: "1:761253335013:web:44c30372a4749203a3690c"
+};
+
+        const app = initializeApp(firebaseConfig);
+        const database = getDatabase(app);
+
+        // Elementos da UI
+        const categoryName = document.getElementById('categoryName');
+        const categoryType = document.getElementById('categoryType');
+        const categoriesList = document.getElementById('categoriesList');
+        const transactionCategory = document.getElementById('transactionCategory');
+        const transactionAmount = document.getElementById('transactionAmount');
+        const transactionMonth = document.getElementById('transactionMonth');
+        const balanceDiv = document.getElementById('balance');
+
+        // Carregar categorias
+        function loadCategories() {
+            const categoriesRef = ref(database, 'categories');
+            
+            onValue(categoriesRef, (snapshot) => {
+                const categories = snapshot.val() || {};
+                populateCategories(categories);
+                populateCategorySelect(categories);
+            }, (error) => {
+                console.error("Erro ao carregar categorias:", error);
+            });
+        }
+
+        function populateCategories(categories) {
+            categoriesList.innerHTML = '<h3>Categorias Existentes</h3>';
+            
+            for (const [key, category] of Object.entries(categories)) {
+                categoriesList.innerHTML += `
+                    <div class="category-item">
+                        ${category.name} (${category.type})
+                        <button onclick="editCategory('${key}')">Editar</button>
+                        <button onclick="deleteCategory('${key}')">Excluir</button>
+                    </div>
+                `;
+            }
+        }
+
+        function populateCategorySelect(categories) {
+            transactionCategory.innerHTML = '';
+            
+            for (const [key, category] of Object.entries(categories)) {
+                const option = document.createElement('option');
+                option.value = key;
+                option.textContent = category.name;
+                transactionCategory.appendChild(option);
+            }
+        }
+
+        // Adicionar categoria
+        window.addCategory = async () => {
+            try {
+                if (!categoryName.value) {
+                    alert('Digite um nome para a categoria');
+                    return;
+                }
+
+                await push(ref(database, 'categories'), {
+                    name: categoryName.value,
+                    type: categoryType.value
+                });
+                
+                categoryName.value = '';
+                console.log('Categoria adicionada com sucesso!');
+            } catch (error) {
+                console.error("Erro ao adicionar categoria:", error);
+                alert('Erro ao adicionar categoria!');
+            }
+        }
+
+        // Editar categoria
+        window.editCategory = async (key) => {
+            const newName = prompt('Novo nome da categoria:');
+            if (newName) {
+                try {
+                    await update(ref(database, `categories/${key}`), {
+                        name: newName
+                    });
+                    console.log('Categoria atualizada!');
+                } catch (error) {
+                    console.error("Erro ao editar categoria:", error);
+                    alert('Erro ao editar categoria!');
+                }
+            }
+        }
+
+        // Excluir categoria
+        window.deleteCategory = async (key) => {
+            if (confirm('Tem certeza que deseja excluir esta categoria?')) {
+                try {
+                    await remove(ref(database, `categories/${key}`));
+                    console.log('Categoria excluída!');
+                } catch (error) {
+                    console.error("Erro ao excluir categoria:", error);
+                    alert('Erro ao excluir categoria!');
+                }
+            }
+        }
+
+        // Adicionar transação
+        window.addTransaction = async () => {
+            try {
+                const amount = parseFloat(transactionAmount.value);
+                
+                if (!transactionCategory.value || !amount || !transactionMonth.value) {
+                    alert('Preencha todos os campos da transação');
+                    return;
+                }
+
+                await push(ref(database, 'transactions'), {
+                    category: transactionCategory.value,
+                    amount: transactionCategory.options[transactionCategory.selectedIndex].text.includes('Receita') ? amount : -amount,
+                    month: transactionMonth.value,
+                    date: Date.now()
+                });
+
+                transactionAmount.value = '';
+                console.log('Transação adicionada!');
+            } catch (error) {
+                console.error("Erro ao adicionar transação:", error);
+                alert('Erro ao adicionar transação!');
+            }
+        }
+
+        // Calcular e exibir saldo
+        function calculateBalance() {
+            const transactionsRef = ref(database, 'transactions');
+            
+            onValue(transactionsRef, async (snapshot) => {
+                const transactions = snapshot.val() || {};
+                const categories = await getCategories();
+                
+                const balance = processTransactions(transactions, categories);
+                displayBalance(balance);
+            }, (error) => {
+                console.error("Erro ao carregar transações:", error);
+            });
+        }
+
+        async function getCategories() {
+            const snapshot = await onValue(ref(database, 'categories'));
+            return snapshot.val() || {};
+        }
+
+        function processTransactions(transactions, categories) {
+            const balance = {};
+            
+            Object.values(transactions).forEach(transaction => {
+                const month = transaction.month;
+                const category = categories[transaction.category];
+                
+                if (!balance[month]) {
+                    balance[month] = {
+                        income: 0,
+                        expense: 0,
+                        total: 0
+                    };
+                }
+
+                if (category?.type === 'income') {
+                    balance[month].income += Math.abs(transaction.amount);
+                } else {
+                    balance[month].expense += Math.abs(transaction.amount);
+                }
+
+                balance[month].total = balance[month].income - balance[month].expense;
+            });
+            
+            return balance;
+        }
+
+        function displayBalance(balance) {
+            let html = '<table><tr><th>Mês</th><th>Receitas</th><th>Despesas</th><th>Saldo</th></tr>';
+            
+            Object.entries(balance).sort((a, b) => b[0].localeCompare(a[0])).forEach(([month, values]) => {
+                html += `
+                    <tr>
+                        <td>${month}</td>
+                        <td>R$ ${values.income.toFixed(2)}</td>
+                        <td>R$ ${values.expense.toFixed(2)}</td>
+                        <td class="${values.total >= 0 ? 'positive' : 'negative'}">
+                            R$ ${values.total.toFixed(2)}
+                        </td>
+                    </tr>
+                `;
+            });
+            
+            html += '</table>';
+            balanceDiv.innerHTML = html;
+        }
+
+        // Inicialização
+        window.addEventListener('DOMContentLoaded', () => {
+            loadCategories();
+            calculateBalance();
+        });
+
+    </script>
     <style>
         body { font-family: Arial, sans-serif; margin: 20px; }
         .container { max-width: 800px; margin: 0 auto; }
@@ -12,6 +232,9 @@
         input, select, button { margin: 5px; padding: 8px; }
         table { width: 100%; border-collapse: collapse; margin-top: 10px; }
         th, td { border: 1px solid #ddd; padding: 8px; text-align: left; }
+        .positive { color: green; }
+        .negative { color: red; }
+        .category-item { margin: 5px 0; padding: 5px; border-bottom: 1px solid #eee; }
     </style>
 </head>
 <body>
@@ -40,137 +263,5 @@
             <div id="balance"></div>
         </div>
     </div>
-
-    <script>
-        // Configuração do Firebase
-const firebaseConfig = {
-  apiKey: "AIzaSyCgSkYIvenfEzyjef50OD01Ox9et-nyBMo",
-  authDomain: "fluxo-6d716.firebaseapp.com",
-  databaseURL: "https://fluxo-6d716-default-rtdb.firebaseio.com",
-  projectId: "fluxo-6d716",
-  storageBucket: "fluxo-6d716.firebasestorage.app",
-  messagingSenderId: "761253335013",
-  appId: "1:761253335013:web:44c30372a4749203a3690c"
-};
-        firebase.initializeApp(firebaseConfig);
-        const database = firebase.database();
-
-        // Carregar categorias
-        function loadCategories() {
-            const categoriesRef = database.ref('categories');
-            categoriesRef.on('value', (snapshot) => {
-                const categories = snapshot.val() || {};
-                const select = document.getElementById('transactionCategory');
-                select.innerHTML = '';
-                
-                let categoriesList = '<h3>Categorias Existentes</h3>';
-                for (const key in categories) {
-                    categoriesList += `
-                        <div>
-                            ${categories[key].name} (${categories[key].type})
-                            <button onclick="editCategory('${key}')">Editar</button>
-                            <button onclick="deleteCategory('${key}')">Excluir</button>
-                        </div>
-                    `;
-                    
-                    const option = document.createElement('option');
-                    option.value = key;
-                    option.textContent = categories[key].name;
-                    select.appendChild(option);
-                }
-                document.getElementById('categoriesList').innerHTML = categoriesList;
-            });
-        }
-
-        // Adicionar categoria
-        function addCategory() {
-            const name = document.getElementById('categoryName').value;
-            const type = document.getElementById('categoryType').value;
-            
-            database.ref('categories').push({
-                name: name,
-                type: type
-            });
-        }
-
-        // Editar categoria
-        function editCategory(key) {
-            const newName = prompt('Novo nome da categoria:');
-            if (newName) {
-                database.ref('categories/' + key).update({
-                    name: newName
-                });
-            }
-        }
-
-        // Excluir categoria
-        function deleteCategory(key) {
-            if (confirm('Tem certeza que deseja excluir esta categoria?')) {
-                database.ref('categories/' + key).remove();
-            }
-        }
-
-        // Adicionar transação
-        function addTransaction() {
-            const categoryKey = document.getElementById('transactionCategory').value;
-            const amount = parseFloat(document.getElementById('transactionAmount').value);
-            const month = document.getElementById('transactionMonth').value;
-
-            database.ref('transactions').push({
-                category: categoryKey,
-                amount: amount,
-                month: month,
-                date: firebase.database.ServerValue.TIMESTAMP
-            });
-        }
-
-        // Calcular saldo
-        function calculateBalance() {
-            const transactionsRef = database.ref('transactions');
-            transactionsRef.on('value', async (snapshot) => {
-                const transactions = snapshot.val() || {};
-                const categories = await database.ref('categories').once('value').then(snap => snap.val() || {});
-
-                const balance = {};
-
-                for (const key in transactions) {
-                    const transaction = transactions[key];
-                    const category = categories[transaction.category];
-                    const month = transaction.month;
-
-                    if (!balance[month]) {
-                        balance[month] = { income: 0, expense: 0, total: 0 };
-                    }
-
-                    if (category.type === 'income') {
-                        balance[month].income += transaction.amount;
-                    } else {
-                        balance[month].expense += transaction.amount;
-                    }
-
-                    balance[month].total = balance[month].income - balance[month].expense;
-                }
-
-                // Exibir saldo
-                let balanceHTML = '<table><tr><th>Mês</th><th>Receitas</th><th>Despesas</th><th>Saldo</th></tr>';
-                for (const month in balance) {
-                    balanceHTML += `
-                        <tr>
-                            <td>${month}</td>
-                            <td>R$ ${balance[month].income.toFixed(2)}</td>
-                            <td>R$ ${balance[month].expense.toFixed(2)}</td>
-                            <td>R$ ${balance[month].total.toFixed(2)}</td>
-                        </tr>
-                    `;
-                }
-                balanceHTML += '</table>';
-                document.getElementById('balance').innerHTML = balanceHTML;
-            });
-        }
-
-        // Inicializar
-        loadCategories();
-        calculateBalance();
-    </script>
 </body>
 </html>
