@@ -194,8 +194,11 @@ const firebaseConfig = {
           });
         });
 
+        let acumulado = 0;
         months.forEach(month => {
-          saldos[month] = receitas[month] - despesas[month];
+          const saldoMensal = receitas[month] - despesas[month];
+          acumulado += saldoMensal;
+          saldos[month] = acumulado;
         });
 
         updateSaldoRow(saldos);
