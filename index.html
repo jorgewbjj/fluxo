@@ -2,172 +2,351 @@
 <html lang="pt-BR">
 <head>
   <meta charset="UTF-8" />
-  <title>Fluxo de Caixa</title>
+  <title>Fluxo de Caixa - Moderno</title>
   <style>
+    @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;600&display=swap');
+
     :root {
-      --bg: #f4f6f8;
-      --white: #fff;
-      --gray: #ccc;
-      --primary: #4f46e5;
-      --income: #34d399;
-      --expense: #f87171;
+      --color-bg: #fafafa;
+      --color-surface: #ffffff;
+      --color-primary: #3b82f6;
+      --color-primary-dark: #2563eb;
+      --color-text-primary: #111827;
+      --color-text-secondary: #6b7280;
+      --color-income: #22c55e;
+      --color-expense: #ef4444;
+      --color-border: #e5e7eb;
+      --color-hover: #f3f4f6;
+    }
+
+    * {
+      box-sizing: border-box;
     }
 
     body {
-      font-family: Arial, sans-serif;
-      background: var(--bg);
       margin: 0;
-      padding: 20px;
+      font-family: 'Inter', sans-serif;
+      background-color: var(--color-bg);
+      color: var(--color-text-primary);
+      padding: 24px 16px;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      min-height: 100vh;
     }
 
     h2 {
-      text-align: center;
-      color: #333;
+      font-weight: 600;
+      font-size: 1.75rem;
+      margin-bottom: 24px;
     }
 
     .container {
-      max-width: 100%;
-      overflow-x: auto;
+      width: 100%;
+      max-width: 1200px;
+      background: var(--color-surface);
+      border-radius: 12px;
+      box-shadow: 0 4px 12px rgb(0 0 0 / 0.05);
+      padding: 24px;
+      box-sizing: border-box;
+    }
+
+    .saldo-inicial-container {
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      margin-bottom: 20px;
+      gap: 8px;
+    }
+
+    .saldo-inicial-container label {
+      font-weight: 600;
+      font-size: 1rem;
+      color: var(--color-text-secondary);
+      user-select: none;
+    }
+
+    .saldo-inicial-container input {
+      width: 120px;
+      padding: 8px 12px;
+      border: 1.5px solid var(--color-border);
+      border-radius: 8px;
+      font-size: 1rem;
+      font-weight: 400;
+      color: var(--color-text-primary);
+      transition: border-color 0.2s ease;
+      text-align: right;
+    }
+
+    .saldo-inicial-container input:focus {
+      outline: none;
+      border-color: var(--color-primary);
+      box-shadow: 0 0 6px var(--color-primary);
+    }
+
+    .btn {
+      background-color: var(--color-primary);
+      color: white;
+      border: none;
+      border-radius: 8px;
+      padding: 12px 24px;
+      font-weight: 600;
+      font-size: 1rem;
+      cursor: pointer;
+      transition: background-color 0.2s ease;
+      user-select: none;
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      margin-bottom: 20px;
+    }
+
+    .btn:hover {
+      background-color: var(--color-primary-dark);
     }
 
     table {
       width: 100%;
-      border-collapse: collapse;
-      background-color: var(--white);
-      box-shadow: 0 1px 3px rgba(0,0,0,0.1);
-      border-radius: 6px;
-      overflow: hidden;
+      border-collapse: separate;
+      border-spacing: 0 8px;
+      font-size: 0.9rem;
     }
 
-    th, td {
-      padding: 10px;
-      border: 1px solid #e0e0e0;
+    thead tr th {
       text-align: center;
+      padding: 12px 8px;
+      font-weight: 600;
+      color: var(--color-text-secondary);
+      border-bottom: 2px solid var(--color-border);
+      user-select: none;
     }
 
-    td[contenteditable="true"] {
+    tbody tr {
+      background: var(--color-surface);
+      box-shadow: 0 2px 6px rgb(0 0 0 / 0.04);
+      border-radius: 8px;
+      transition: background-color 0.15s ease;
+    }
+
+    tbody tr:hover {
+      background-color: var(--color-hover);
+    }
+
+    tbody tr td {
+      padding: 12px 8px;
+      text-align: center;
+      vertical-align: middle;
+      border: none;
+      user-select: text;
+    }
+
+    tbody tr td:first-child {
+      text-align: left;
+      font-weight: 600;
+      position: relative;
+      padding-left: 12px;
+      color: var(--color-text-primary);
+    }
+
+    tbody tr td[contenteditable="true"] {
       background-color: #fcfcfc;
+      border-radius: 4px;
+      cursor: text;
+      transition: background-color 0.15s ease;
     }
 
-    .total-row {
-      background-color: #f0f0f0;
-      font-weight: bold;
+    tbody tr td[contenteditable="true"]:focus {
+      background-color: var(--color-bg);
+      outline: 2px solid var(--color-primary);
+      outline-offset: 2px;
+    }
+
+    .income-label {
+      color: var(--color-income);
+    }
+
+    .expense-label {
+      color: var(--color-expense);
     }
 
     .category-controls {
-      display: inline-flex;
-      gap: 5px;
-      margin-left: 8px;
+      position: absolute;
+      right: 8px;
+      top: 50%;
+      transform: translateY(-50%);
+      display: flex;
+      gap: 6px;
+      opacity: 0;
+      transition: opacity 0.2s ease;
+      user-select: none;
     }
 
-    .btn {
-      background-color: var(--primary);
-      color: white;
-      padding: 8px 16px;
+    tbody tr:hover .category-controls {
+      opacity: 1;
+    }
+
+    .category-controls button {
+      background: none;
       border: none;
-      border-radius: 6px;
       cursor: pointer;
-      margin-bottom: 10px;
+      font-size: 14px;
+      color: var(--color-text-secondary);
+      padding: 2px 6px;
+      border-radius: 4px;
+      transition: background-color 0.2s ease, color 0.2s ease;
     }
 
-    .btn:hover {
-      background-color: #3730a3;
+    .category-controls button:hover {
+      background-color: var(--color-primary);
+      color: white;
     }
 
+    .total-row {
+      font-weight: 700;
+      background-color: var(--color-primary);
+      color: white;
+      border-radius: 8px;
+      box-shadow: none !important;
+    }
+
+    /* Modal styles */
     .modal {
       display: none;
       position: fixed;
       z-index: 1000;
-      left: 0; top: 0;
-      width: 100%; height: 100%;
-      background: rgba(0, 0, 0, 0.5);
+      inset: 0;
+      background: rgba(17, 24, 39, 0.75);
+      display: flex;
       justify-content: center;
       align-items: center;
+      padding: 16px;
     }
 
     .modal-content {
-      background: white;
-      padding: 20px;
-      border-radius: 8px;
-      width: 300px;
+      background: var(--color-surface);
+      border-radius: 12px;
+      max-width: 360px;
+      width: 100%;
+      padding: 24px 32px;
       display: flex;
       flex-direction: column;
-      gap: 12px;
+      gap: 16px;
+      box-shadow: 0 8px 24px rgb(0 0 0 / 0.12);
     }
 
-    .modal input, .modal select {
-      padding: 8px;
-      font-size: 14px;
-      border: 1px solid var(--gray);
-      border-radius: 4px;
+    .modal-content h3 {
+      margin: 0;
+      font-weight: 700;
+      font-size: 1.25rem;
+      color: var(--color-text-primary);
+      text-align: center;
+    }
+
+    .modal-content input,
+    .modal-content select {
+      font-size: 1rem;
+      padding: 10px 14px;
+      border-radius: 8px;
+      border: 1.5px solid var(--color-border);
+      transition: border-color 0.2s ease;
+      outline: none;
+      width: 100%;
+      color: var(--color-text-primary);
+    }
+
+    .modal-content input:focus,
+    .modal-content select:focus {
+      border-color: var(--color-primary);
+      box-shadow: 0 0 8px var(--color-primary);
     }
 
     .modal-buttons {
       display: flex;
-      justify-content: space-between;
-      margin-top: 10px;
+      justify-content: flex-end;
+      gap: 12px;
+      margin-top: 8px;
     }
 
-    .modal .btn-cancel {
-      background: #e5e7eb;
-      color: #333;
+    .modal-buttons button {
+      flex: 1;
+      font-weight: 600;
+      padding: 12px 0;
+      border-radius: 8px;
+      border: none;
+      cursor: pointer;
+      font-size: 1rem;
+      user-select: none;
+      transition: background-color 0.2s ease;
     }
 
-    .income-label { color: var(--income); }
-    .expense-label { color: var(--expense); }
-
-    .saldo-inicial-container {
-      max-width: 300px;
-      margin: 0 auto 15px auto;
-      text-align: center;
+    .btn-cancel {
+      background-color: var(--color-border);
+      color: var(--color-text-secondary);
     }
 
-    .saldo-inicial-container label {
-      font-weight: bold;
-      margin-right: 8px;
-      color: #333;
+    .btn-cancel:hover {
+      background-color: #d1d5db;
     }
 
-    .saldo-inicial-container input {
-      width: 100px;
-      padding: 6px 8px;
-      font-size: 16px;
-      border: 1px solid var(--gray);
-      border-radius: 4px;
-      text-align: right;
+    .btn-confirm {
+      background-color: var(--color-primary);
+      color: white;
     }
 
+    .btn-confirm:hover {
+      background-color: var(--color-primary-dark);
+    }
+
+    /* Scroll horizontal for table on small screens */
+    @media (max-width: 768px) {
+      .container {
+        padding: 16px 12px;
+      }
+
+      table {
+        font-size: 0.8rem;
+      }
+
+      .saldo-inicial-container {
+        flex-direction: column;
+        gap: 6px;
+      }
+    }
   </style>
 </head>
 <body>
 
   <h2>Fluxo de Caixa</h2>
 
-  <div class="saldo-inicial-container">
-    <label for="saldoInicialInput">Saldo Inicial (R$):</label>
-    <input type="number" id="saldoInicialInput" step="0.01" value="0" />
-  </div>
-
   <div class="container">
-    <button class="btn" onclick="openModal()">+ Adicionar Categoria</button>
-    <table id="cashflowTable">
+
+    <div class="saldo-inicial-container">
+      <label for="saldoInicialInput">Saldo Inicial (R$):</label>
+      <input type="number" id="saldoInicialInput" step="0.01" value="0" />
+    </div>
+
+    <button class="btn" onclick="openModal()">
+      <span>+ Adicionar Categoria</span>
+    </button>
+
+    <table id="cashflowTable" aria-label="Tabela de fluxo de caixa">
       <thead id="tableHead"></thead>
       <tbody id="tableBody"></tbody>
     </table>
   </div>
 
   <!-- Modal para adicionar categoria -->
-  <div id="modal" class="modal">
+  <div id="modal" class="modal" role="dialog" aria-modal="true" aria-labelledby="modalTitle" aria-describedby="modalDesc">
     <div class="modal-content">
-      <h3>Nova Categoria</h3>
-      <input type="text" id="categoryName" placeholder="Nome da Categoria" />
-      <select id="categoryType">
+      <h3 id="modalTitle">Nova Categoria</h3>
+      <input type="text" id="categoryName" placeholder="Nome da Categoria" aria-label="Nome da Categoria" />
+      <select id="categoryType" aria-label="Tipo da Categoria">
         <option value="receita">Receita</option>
         <option value="despesa">Despesa</option>
       </select>
       <div class="modal-buttons">
-        <button class="btn btn-cancel" onclick="closeModal()">Cancelar</button>
-        <button class="btn" onclick="confirmAddCategory()">Adicionar</button>
+        <button class="btn-cancel" onclick="closeModal()">Cancelar</button>
+        <button class="btn-confirm" onclick="confirmAddCategory()">Adicionar</button>
       </div>
     </div>
   </div>
@@ -186,7 +365,7 @@ const firebaseConfig = {
   storageBucket: "fluxo-6d716.firebasestorage.app",
   messagingSenderId: "761253335013",
   appId: "1:761253335013:web:44c30372a4749203a3690c"
-}
+};
 
     firebase.initializeApp(firebaseConfig);
     const db = firebase.database();
@@ -198,7 +377,6 @@ const firebaseConfig = {
       return date.toLocaleDateString('pt-BR', { month: 'short', year: 'numeric' });
     });
 
-    // Leitura e gravação do saldo inicial no localStorage
     const saldoInput = document.getElementById("saldoInicialInput");
     let saldoInicial = parseFloat(localStorage.getItem("saldoInicial")) || 0;
     saldoInput.value = saldoInicial.toFixed(2);
@@ -233,119 +411,97 @@ const firebaseConfig = {
         const labelClass = value.type === 'receita' ? 'income-label' : 'expense-label';
         tr.innerHTML = `
           <td contenteditable="true" onblur="editCategoryName('${key}', this.innerText)">
-            <span class="${labelClass}">${value.name || ''}</span>
-            <div class="category-controls">
-              <button onclick="moveCategory('${key}', -1)">⬆️</button>
-              <button onclick="moveCategory('${key}', 1)">⬇️</button>
-              <button onclick="deleteCategory('${key}')">🗑️</button>
+            <span class="${labelClass}">${value.name || key}</span>
+            <div class="category-controls" aria-label="Controles de categoria">
+              <button aria-label="Remover categoria" onclick="removeCategory('${key}')">🗑️</button>
             </div>
           </td>
+          ${months.map((m, i) => `<td contenteditable="true" onblur="editCategoryValue('${key}', '${m}', this.innerText)" aria-label="Valor para ${m}">${formatValue(value[m] || 0)}</td>`).join('')}
         `;
 
-        months.forEach((_, i) => {
-          const val = value.values?.[i] || '';
-          const num = parseFloat(val.replace(',', '.')) || 0;
-          totals[i] += num;
-
-          if (value.type === 'receita') {
-            totalReceita[i] += num;
-          } else {
-            totalDespesa[i] += num;
-          }
-
-          const td = document.createElement("td");
-          td.contentEditable = true;
-          td.innerText = val;
-          td.onblur = () => {
-            tableRef.child(`${key}/values/${i}`).set(td.innerText);
-          };
-          tr.appendChild(td);
+        // Calcular totais
+        months.forEach((m, i) => {
+          const val = parseFloat(value[m]) || 0;
+          totals[i] += value.type === 'receita' ? val : -val;
+          if (value.type === 'receita') totalReceita[i] += val;
+          else totalDespesa[i] += val;
         });
 
         body.appendChild(tr);
       });
 
-      // Linha Total
+      // Linha de totais
       const totalRow = document.createElement("tr");
-      totalRow.className = 'total-row';
-      totalRow.innerHTML = `<td>Total</td>` +
-        totals.map(t => `<td>${t.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</td>`).join('');
+      totalRow.className = "total-row";
+      totalRow.innerHTML = `<td>Total</td>` + months.map((m, i) => `<td>${formatValue(totals[i] + saldoInicial)}</td>`).join('');
       body.appendChild(totalRow);
-
-      // Linha Receita - Despesa
-      const netRow = document.createElement("tr");
-      netRow.className = 'total-row';
-      netRow.innerHTML = `<td>Receita - Despesa</td>` +
-        months.map((_, i) => {
-          const net = totalReceita[i] - totalDespesa[i];
-          return `<td>${net.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</td>`;
-        }).join('');
-      body.appendChild(netRow);
-
-      // Linha Saldo Acumulado
-      const saldoRow = document.createElement("tr");
-      saldoRow.className = 'total-row';
-      saldoRow.innerHTML = `<td>Saldo Acumulado</td>`;
-
-      let acumulado = saldoInicial;
-      for (let i = 0; i < months.length; i++) {
-        acumulado += totalReceita[i] - totalDespesa[i];
-        saldoRow.innerHTML += `<td>${acumulado.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</td>`;
-      }
-      body.appendChild(saldoRow);
     }
 
-    function openModal() {
-      document.getElementById('modal').style.display = 'flex';
-      document.getElementById('categoryName').value = '';
-      document.getElementById('categoryType').value = 'receita';
+    function formatValue(val) {
+      return Number(val).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
     }
 
-    function closeModal() {
-      document.getElementById('modal').style.display = 'none';
+    function editCategoryName(key, newName) {
+      newName = newName.trim();
+      if (newName.length === 0) return alert('Nome da categoria não pode ficar vazio.');
+      tableRef.child(key).update({ name: newName });
     }
 
-    function confirmAddCategory() {
-      const name = document.getElementById('categoryName').value.trim();
-      const type = document.getElementById('categoryType').value;
-      if (!name) return alert("Informe o nome da categoria.");
-
-      const newRef = tableRef.push();
-      newRef.set({ name, type, values: {} });
-      closeModal();
+    function editCategoryValue(key, month, value) {
+      let val = parseFloat(value.replace(/[^\d.,-]/g, '').replace(',', '.'));
+      if (isNaN(val)) val = 0;
+      tableRef.child(key).child(month).set(val);
     }
 
-    function editCategoryName(key, name) {
-      const newName = name.trim().replace(/[\n\r]/g, '');
-      tableRef.child(`${key}/name`).set(newName);
-    }
-
-    function deleteCategory(key) {
-      if (confirm("Excluir esta categoria?")) {
+    function removeCategory(key) {
+      if (confirm('Deseja realmente remover esta categoria?')) {
         tableRef.child(key).remove();
       }
     }
 
-    function moveCategory(key, dir) {
-      tableRef.once("value", snap => {
-        const data = snap.val();
-        const keys = Object.keys(data);
-        const idx = keys.indexOf(key);
-        const newIdx = idx + dir;
-        if (newIdx < 0 || newIdx >= keys.length) return;
-        const reordered = [...keys];
-        [reordered[idx], reordered[newIdx]] = [reordered[newIdx], reordered[idx]];
-        const updates = {};
-        reordered.forEach(k => updates[k] = data[k]);
-        tableRef.set(updates);
-      });
+    // Modal logic
+    const modal = document.getElementById("modal");
+    const categoryNameInput = document.getElementById("categoryName");
+    const categoryTypeSelect = document.getElementById("categoryType");
+
+    function openModal() {
+      categoryNameInput.value = '';
+      categoryTypeSelect.value = 'receita';
+      modal.style.display = 'flex';
+      categoryNameInput.focus();
     }
 
-    // 🔁 Inicialização
-    tableRef.on("value", snap => {
-      const data = snap.val() || {};
+    function closeModal() {
+      modal.style.display = 'none';
+    }
+
+    function confirmAddCategory() {
+      const name = categoryNameInput.value.trim();
+      const type = categoryTypeSelect.value;
+      if (!name) {
+        alert('Informe o nome da categoria.');
+        categoryNameInput.focus();
+        return;
+      }
+      const newKey = tableRef.push().key;
+      tableRef.child(newKey).set({ name, type });
+      closeModal();
+    }
+
+    // Fecha modal ao clicar fora do conteúdo
+    modal.addEventListener('click', (e) => {
+      if (e.target === modal) closeModal();
+    });
+
+    // Listener Firebase
+    tableRef.on("value", (snapshot) => {
+      const data = snapshot.val() || {};
       renderTable(data);
     });
+
+    // Inicializar tabela vazia caso não tenha dados
+    renderTable(lastData);
+
   </script>
 </body>
 </html>
