@@ -2,7 +2,7 @@
 <html lang="pt-br">
 <head>
     <meta charset="UTF-8">
-    <title>Gestão Financeira Completa</title>
+    <title>Gestão Financeira Avançada</title>
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <script type="module">
         import { initializeApp } from "https://www.gstatic.com/firebasejs/9.22.2/firebase-app.js";
@@ -16,7 +16,7 @@
             get 
         } from "https://www.gstatic.com/firebasejs/9.22.2/firebase-database.js";
 
- const firebaseConfig = {
+const firebaseConfig = {
   apiKey: "AIzaSyCgSkYIvenfEzyjef50OD01Ox9et-nyBMo",
   authDomain: "fluxo-6d716.firebaseapp.com",
   databaseURL: "https://fluxo-6d716-default-rtdb.firebaseio.com",
@@ -29,6 +29,7 @@
         const app = initializeApp(firebaseConfig);
         const database = getDatabase(app);
         let chartInstance = null;
+        let draggedItem = null;
 
         const elements = {
             balanceDiv: document.getElementById('balance'),
@@ -112,8 +113,12 @@
         }
 
         async function handleCategoryEdit(catId, currentName, currentType) {
+            const typeMap = {
+                'income': 'receita',
+                'expense': 'despesa'
+            };
             const newName = prompt('Novo nome da categoria:', currentName);
-            const newType = prompt('Novo tipo (receita/despesa):', currentType === 'income' ? 'receita' : 'despesa');
+            const newType = prompt('Novo tipo (receita/despesa):', typeMap[currentType]);
             
             if (newName && newType && ['receita', 'despesa'].includes(newType.toLowerCase())) {
                 await update(ref(database, `categories/${catId}`), {
@@ -130,7 +135,8 @@
             if (name && (type === 'receita' || type === 'despesa')) {
                 await push(ref(database, 'categories'), { 
                     name: name.trim(),
-                    type: type === 'receita' ? 'income' : 'expense'
+                    type: type === 'receita' ? 'income' : 'expense',
+                    order: Object.keys((await get(ref(database, 'categories'))).length
                 });
             } else {
                 alert('Dados inválidos! Use "receita" ou "despesa" para o tipo.');
@@ -221,10 +227,82 @@
             return { html: totals.join(''), data: cumulativeData };
         }
 
+        function addDragAndDrop() {
+            const container = document.querySelector('.table-container tbody');
+            
+            container.querySelectorAll('tr').forEach(row => {
+                row.draggable = true;
+                
+                row.addEventListener('dragstart', (e) => {
+                    draggedItem = row;
+                    setTimeout(() => row.classList.add('dragging'), 0);
+                });
+
+                row.addEventListener('dragend', async (e) => {
+                    row.classList.remove('dragging');
+                    await updateCategoryOrder();
+                });
+
+                row.addEventListener('dragover', (e) => {
+                    e.preventDefault();
+                    const afterElement = getDragAfterElement(container, e.clientY);
+                    const currentItem = draggedItem;
+                    
+                    if (afterElement == null) {
+                        container.appendChild(currentItem);
+                    } else {
+                        container.insertBefore(currentItem, afterElement);
+                    }
+                });
+            });
+        }
+
+        function getDragAfterElement(container, y) {
+            const draggableElements = [...container.querySelectorAll('tr:not(.dragging)')];
+            
+            return draggableElements.reduce((closest, child) => {
+                const box = child.getBoundingClientRect();
+                const offset = y - box.top - box.height / 2;
+                
+                if (offset < 0 && offset > closest.offset) {
+                    return { offset: offset, element: child };
+                } else {
+                    return closest;
+                }
+            }, { offset: Number.NEGATIVE_INFINITY }).element;
+        }
+
+        async function updateCategoryOrder() {
+            const categoriesRef = ref(database, 'categories');
+            const snapshot = await get(categoriesRef);
+            const categories = snapshot.val() || {};
+            
+            const rows = document.querySelectorAll('.table-container tbody tr');
+            const newOrder = Array.from(rows).map((row, index) => ({
+                id: row.querySelector('td').dataset.categoryId,
+                order: index
+            }));
+            
+            Object.entries(categories).forEach(async ([catId, cat]) => {
+                const newOrderItem = newOrder.find(item => item.id === catId);
+                if (newOrderItem) {
+                    await update(ref(database, `categories/${catId}`), {
+                        ...cat,
+                        order: newOrderItem.order
+                    });
+                }
+            });
+        }
+
         function renderTable(data) {
             const { categories, transactions, months } = data;
             const { html: totalsHtml, data: cumulativeData } = calculateCumulativeTotals(transactions, categories, months);
             
+            // Ordenar categorias
+            const sortedCategories = Object.entries(categories).sort((a, b) => {
+                return (a[1].order || 0) - (b[1].order || 0);
+            });
+
             let html = `
                 <div class="table-container">
                     <table>
@@ -240,10 +318,10 @@
                         </thead>
                         <tbody>`;
 
-            Object.entries(categories).forEach(([catId, category]) => {
+            sortedCategories.forEach(([catId, category]) => {
                 html += `
                     <tr>
-                        <td class="sticky-col category-cell ${category.type}">
+                        <td class="sticky-col category-cell ${category.type}" data-category-id="${catId}">
                             <div class="category-header">
                                 <span>${category.name}</span>
                                 <div>
@@ -283,6 +361,7 @@
             elements.chartContainer.innerHTML = '<canvas id="cashflowChart"></canvas>';
             renderChart(cumulativeData, months);
 
+            // Eventos de edição
             document.querySelectorAll('.editable-cell').forEach(cell => {
                 cell.addEventListener('focus', (e) => {
                     const range = document.createRange();
@@ -299,6 +378,9 @@
                     handleCellEdit(categoryId, month, newValue);
                 });
             });
+
+            // Configurar drag and drop
+            addDragAndDrop();
         }
 
         window.addEventListener('DOMContentLoaded', async () => {
@@ -471,6 +553,25 @@
         #cashflowChart {
             max-height: 400px;
             width: 100% !important;
+        }
+
+        /* Drag and Drop Styles */
+        .dragging {
+            opacity: 0.5;
+            background: #f8f9fa !important;
+        }
+
+        tr {
+            transition: transform 0.2s, opacity 0.2s;
+            cursor: move;
+        }
+
+        tr:hover {
+            background-color: #f8f9fa;
+        }
+
+        .table-container tr.dragging {
+            border: 2px dashed var(--primary-color);
         }
     </style>
 </head>
