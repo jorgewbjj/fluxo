@@ -2,506 +2,157 @@
 <html lang="pt-BR">
 <head>
   <meta charset="UTF-8" />
-  <title>Fluxo de Caixa - Moderno</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Fluxo de Caixa - 24 Meses</title>
   <style>
-    @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;600&display=swap');
-
-    :root {
-      --color-bg: #fafafa;
-      --color-surface: #ffffff;
-      --color-primary: #3b82f6;
-      --color-primary-dark: #2563eb;
-      --color-text-primary: #111827;
-      --color-text-secondary: #6b7280;
-      --color-income: #22c55e;
-      --color-expense: #ef4444;
-      --color-border: #e5e7eb;
-      --color-hover: #f3f4f6;
-    }
-
-    * {
-      box-sizing: border-box;
-    }
-
     body {
-      margin: 0;
       font-family: 'Inter', sans-serif;
-      background-color: var(--color-bg);
-      color: var(--color-text-primary);
-      padding: 24px 16px;
-      display: flex;
-      flex-direction: column;
-      align-items: center;
-      min-height: 100vh;
+      background: #f7f9fb;
+      margin: 0;
+      padding: 2rem;
+      color: #333;
     }
 
-    h2 {
-      font-weight: 600;
-      font-size: 1.75rem;
-      margin-bottom: 24px;
+    h1 {
+      text-align: center;
+      margin-bottom: 2rem;
+      color: #222;
     }
 
-    .container {
-      width: 100%;
-      max-width: 1200px;
-      background: var(--color-surface);
-      border-radius: 12px;
-      box-shadow: 0 4px 12px rgb(0 0 0 / 0.05);
-      padding: 24px;
-      box-sizing: border-box;
-    }
-
-    .saldo-inicial-container {
-      display: flex;
-      justify-content: center;
-      align-items: center;
-      margin-bottom: 20px;
-      gap: 8px;
-    }
-
-    .saldo-inicial-container label {
-      font-weight: 600;
-      font-size: 1rem;
-      color: var(--color-text-secondary);
-      user-select: none;
-    }
-
-    .saldo-inicial-container input {
-      width: 120px;
-      padding: 8px 12px;
-      border: 1.5px solid var(--color-border);
-      border-radius: 8px;
-      font-size: 1rem;
-      font-weight: 400;
-      color: var(--color-text-primary);
-      transition: border-color 0.2s ease;
-      text-align: right;
-    }
-
-    .saldo-inicial-container input:focus {
-      outline: none;
-      border-color: var(--color-primary);
-      box-shadow: 0 0 6px var(--color-primary);
-    }
-
-    .btn {
-      background-color: var(--color-primary);
-      color: white;
-      border: none;
-      border-radius: 8px;
-      padding: 12px 24px;
-      font-weight: 600;
-      font-size: 1rem;
-      cursor: pointer;
-      transition: background-color 0.2s ease;
-      user-select: none;
-      display: inline-flex;
-      align-items: center;
-      gap: 8px;
-      margin-bottom: 20px;
-    }
-
-    .btn:hover {
-      background-color: var(--color-primary-dark);
+    .table-container {
+      overflow-x: auto;
     }
 
     table {
+      border-collapse: collapse;
       width: 100%;
-      border-collapse: separate;
-      border-spacing: 0 8px;
-      font-size: 0.9rem;
-    }
-
-    thead tr th {
-      text-align: center;
-      padding: 12px 8px;
-      font-weight: 600;
-      color: var(--color-text-secondary);
-      border-bottom: 2px solid var(--color-border);
-      user-select: none;
-    }
-
-    tbody tr {
-      background: var(--color-surface);
-      box-shadow: 0 2px 6px rgb(0 0 0 / 0.04);
+      min-width: 1200px;
+      background: #fff;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.05);
       border-radius: 8px;
-      transition: background-color 0.15s ease;
+      overflow: hidden;
     }
 
-    tbody tr:hover {
-      background-color: var(--color-hover);
+    th, td {
+      padding: 12px 16px;
+      border-bottom: 1px solid #eee;
+      text-align: right;
     }
 
-    tbody tr td {
-      padding: 12px 8px;
-      text-align: center;
-      vertical-align: middle;
-      border: none;
-      user-select: text;
-    }
-
-    tbody tr td:first-child {
+    th:first-child,
+    td:first-child {
       text-align: left;
+      background: #fafafa;
       font-weight: 600;
-      position: relative;
-      padding-left: 12px;
-      color: var(--color-text-primary);
     }
 
-    tbody tr td[contenteditable="true"] {
-      background-color: #fcfcfc;
-      border-radius: 4px;
-      cursor: text;
-      transition: background-color 0.15s ease;
+    tr:last-child {
+      background: #f0f4f8;
+      font-weight: bold;
     }
 
-    tbody tr td[contenteditable="true"]:focus {
-      background-color: var(--color-bg);
-      outline: 2px solid var(--color-primary);
-      outline-offset: 2px;
-    }
-
-    .income-label {
-      color: var(--color-income);
-    }
-
-    .expense-label {
-      color: var(--color-expense);
-    }
-
-    .category-controls {
-      position: absolute;
-      right: 8px;
-      top: 50%;
-      transform: translateY(-50%);
-      display: flex;
-      gap: 6px;
-      opacity: 0;
-      transition: opacity 0.2s ease;
-      user-select: none;
-    }
-
-    tbody tr:hover .category-controls {
-      opacity: 1;
-    }
-
-    .category-controls button {
-      background: none;
-      border: none;
-      cursor: pointer;
-      font-size: 14px;
-      color: var(--color-text-secondary);
-      padding: 2px 6px;
-      border-radius: 4px;
-      transition: background-color 0.2s ease, color 0.2s ease;
-    }
-
-    .category-controls button:hover {
-      background-color: var(--color-primary);
-      color: white;
-    }
-
-    .total-row {
-      font-weight: 700;
-      background-color: var(--color-primary);
-      color: white;
-      border-radius: 8px;
-      box-shadow: none !important;
-    }
-
-    /* Modal styles */
-    .modal {
-      display: none;
-      position: fixed;
-      z-index: 1000;
-      inset: 0;
-      background: rgba(17, 24, 39, 0.75);
-      display: flex;
-      justify-content: center;
-      align-items: center;
-      padding: 16px;
-    }
-
-    .modal-content {
-      background: var(--color-surface);
-      border-radius: 12px;
-      max-width: 360px;
-      width: 100%;
-      padding: 24px 32px;
-      display: flex;
-      flex-direction: column;
-      gap: 16px;
-      box-shadow: 0 8px 24px rgb(0 0 0 / 0.12);
-    }
-
-    .modal-content h3 {
-      margin: 0;
-      font-weight: 700;
-      font-size: 1.25rem;
-      color: var(--color-text-primary);
-      text-align: center;
-    }
-
-    .modal-content input,
-    .modal-content select {
-      font-size: 1rem;
-      padding: 10px 14px;
-      border-radius: 8px;
-      border: 1.5px solid var(--color-border);
-      transition: border-color 0.2s ease;
+    td[contenteditable="true"] {
+      background-color: #fefefe;
       outline: none;
-      width: 100%;
-      color: var(--color-text-primary);
+      cursor: text;
     }
 
-    .modal-content input:focus,
-    .modal-content select:focus {
-      border-color: var(--color-primary);
-      box-shadow: 0 0 8px var(--color-primary);
+    .saldo-negativo {
+      color: red;
     }
 
-    .modal-buttons {
-      display: flex;
-      justify-content: flex-end;
-      gap: 12px;
-      margin-top: 8px;
-    }
-
-    .modal-buttons button {
-      flex: 1;
-      font-weight: 600;
-      padding: 12px 0;
-      border-radius: 8px;
-      border: none;
-      cursor: pointer;
-      font-size: 1rem;
-      user-select: none;
-      transition: background-color 0.2s ease;
-    }
-
-    .btn-cancel {
-      background-color: var(--color-border);
-      color: var(--color-text-secondary);
-    }
-
-    .btn-cancel:hover {
-      background-color: #d1d5db;
-    }
-
-    .btn-confirm {
-      background-color: var(--color-primary);
-      color: white;
-    }
-
-    .btn-confirm:hover {
-      background-color: var(--color-primary-dark);
-    }
-
-    /* Scroll horizontal for table on small screens */
-    @media (max-width: 768px) {
-      .container {
-        padding: 16px 12px;
-      }
-
-      table {
-        font-size: 0.8rem;
-      }
-
-      .saldo-inicial-container {
-        flex-direction: column;
-        gap: 6px;
-      }
+    .saldo-positivo {
+      color: green;
     }
   </style>
 </head>
 <body>
-
-  <h2>Fluxo de Caixa</h2>
-
-  <div class="container">
-
-    <div class="saldo-inicial-container">
-      <label for="saldoInicialInput">Saldo Inicial (R$):</label>
-      <input type="number" id="saldoInicialInput" step="0.01" value="0" />
-    </div>
-
-    <button class="btn" onclick="openModal()">
-      <span>+ Adicionar Categoria</span>
-    </button>
-
-    <table id="cashflowTable" aria-label="Tabela de fluxo de caixa">
-      <thead id="tableHead"></thead>
-      <tbody id="tableBody"></tbody>
+  <h1>Fluxo de Caixa - 24 Meses</h1>
+  <div class="table-container">
+    <table id="cashFlowTable">
+      <thead>
+        <tr>
+          <th>Categoria</th>
+          <!-- Gerado dinamicamente -->
+        </tr>
+      </thead>
+      <tbody id="tableBody">
+        <!-- Categorias e dados aqui -->
+      </tbody>
     </table>
   </div>
 
-  <!-- Modal para adicionar categoria -->
-  <div id="modal" class="modal" role="dialog" aria-modal="true" aria-labelledby="modalTitle" aria-describedby="modalDesc">
-    <div class="modal-content">
-      <h3 id="modalTitle">Nova Categoria</h3>
-      <input type="text" id="categoryName" placeholder="Nome da Categoria" aria-label="Nome da Categoria" />
-      <select id="categoryType" aria-label="Tipo da Categoria">
-        <option value="receita">Receita</option>
-        <option value="despesa">Despesa</option>
-      </select>
-      <div class="modal-buttons">
-        <button class="btn-cancel" onclick="closeModal()">Cancelar</button>
-        <button class="btn-confirm" onclick="confirmAddCategory()">Adicionar</button>
-      </div>
-    </div>
-  </div>
-
-  <!-- Firebase SDK -->
-  <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
-  <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-database-compat.js"></script>
-
   <script>
-    // 🔁 Substitua com suas credenciais do Firebase:
-const firebaseConfig = {
-  apiKey: "AIzaSyCgSkYIvenfEzyjef50OD01Ox9et-nyBMo",
-  authDomain: "fluxo-6d716.firebaseapp.com",
-  databaseURL: "https://fluxo-6d716-default-rtdb.firebaseio.com",
-  projectId: "fluxo-6d716",
-  storageBucket: "fluxo-6d716.firebasestorage.app",
-  messagingSenderId: "761253335013",
-  appId: "1:761253335013:web:44c30372a4749203a3690c"
-};
-
-    firebase.initializeApp(firebaseConfig);
-    const db = firebase.database();
-    const tableRef = db.ref("cashflow");
-
-    const months = Array.from({ length: 24 }, (_, i) => {
-      const date = new Date();
-      date.setMonth(date.getMonth() + i);
-      return date.toLocaleDateString('pt-BR', { month: 'short', year: 'numeric' });
+    const categorias = ["Receita", "Aluguel", "Salários", "Marketing", "Utilidades", "Outros"];
+    const meses = [...Array(24)].map((_, i) => {
+      const d = new Date();
+      d.setMonth(d.getMonth() + i);
+      return d.toLocaleString('default', { month: 'short', year: '2-digit' });
     });
 
-    const saldoInput = document.getElementById("saldoInicialInput");
-    let saldoInicial = parseFloat(localStorage.getItem("saldoInicial")) || 0;
-    saldoInput.value = saldoInicial.toFixed(2);
+    const thead = document.querySelector('thead tr');
+    const tbody = document.getElementById('tableBody');
 
-    saldoInput.addEventListener("change", () => {
-      saldoInicial = parseFloat(saldoInput.value) || 0;
-      localStorage.setItem("saldoInicial", saldoInicial.toFixed(2));
-      if (lastData) renderTable(lastData);
+    // Cabeçalho dos meses
+    meses.forEach(m => {
+      const th = document.createElement('th');
+      th.textContent = m;
+      thead.appendChild(th);
     });
 
-    let lastData = null;
+    // Corpo da tabela
+    categorias.forEach(cat => {
+      const row = document.createElement('tr');
+      const tdCategoria = document.createElement('td');
+      tdCategoria.textContent = cat;
+      row.appendChild(tdCategoria);
 
-    function renderTable(data = {}) {
-      lastData = data; // salvar referência
-
-      const head = document.getElementById("tableHead");
-      const body = document.getElementById("tableBody");
-      head.innerHTML = '';
-      body.innerHTML = '';
-
-      const tr = document.createElement("tr");
-      tr.innerHTML = `<th>Categoria</th>` + months.map(m => `<th>${m}</th>`).join('');
-      head.appendChild(tr);
-
-      const totals = new Array(months.length).fill(0);
-      const totalReceita = new Array(months.length).fill(0);
-      const totalDespesa = new Array(months.length).fill(0);
-
-      Object.entries(data).forEach(([key, value]) => {
-        const tr = document.createElement("tr");
-
-        const labelClass = value.type === 'receita' ? 'income-label' : 'expense-label';
-        tr.innerHTML = `
-          <td contenteditable="true" onblur="editCategoryName('${key}', this.innerText)">
-            <span class="${labelClass}">${value.name || key}</span>
-            <div class="category-controls" aria-label="Controles de categoria">
-              <button aria-label="Remover categoria" onclick="removeCategory('${key}')">🗑️</button>
-            </div>
-          </td>
-          ${months.map((m, i) => `<td contenteditable="true" onblur="editCategoryValue('${key}', '${m}', this.innerText)" aria-label="Valor para ${m}">${formatValue(value[m] || 0)}</td>`).join('')}
-        `;
-
-        // Calcular totais
-        months.forEach((m, i) => {
-          const val = parseFloat(value[m]) || 0;
-          totals[i] += value.type === 'receita' ? val : -val;
-          if (value.type === 'receita') totalReceita[i] += val;
-          else totalDespesa[i] += val;
-        });
-
-        body.appendChild(tr);
+      meses.forEach(() => {
+        const td = document.createElement('td');
+        td.contentEditable = true;
+        td.textContent = "0";
+        td.addEventListener('input', calcularSaldo);
+        row.appendChild(td);
       });
 
-      // Linha de totais
-      const totalRow = document.createElement("tr");
-      totalRow.className = "total-row";
-      totalRow.innerHTML = `<td>Total</td>` + months.map((m, i) => `<td>${formatValue(totals[i] + saldoInicial)}</td>`).join('');
-      body.appendChild(totalRow);
-    }
-
-    function formatValue(val) {
-      return Number(val).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
-    }
-
-    function editCategoryName(key, newName) {
-      newName = newName.trim();
-      if (newName.length === 0) return alert('Nome da categoria não pode ficar vazio.');
-      tableRef.child(key).update({ name: newName });
-    }
-
-    function editCategoryValue(key, month, value) {
-      let val = parseFloat(value.replace(/[^\d.,-]/g, '').replace(',', '.'));
-      if (isNaN(val)) val = 0;
-      tableRef.child(key).child(month).set(val);
-    }
-
-    function removeCategory(key) {
-      if (confirm('Deseja realmente remover esta categoria?')) {
-        tableRef.child(key).remove();
-      }
-    }
-
-    // Modal logic
-    const modal = document.getElementById("modal");
-    const categoryNameInput = document.getElementById("categoryName");
-    const categoryTypeSelect = document.getElementById("categoryType");
-
-    function openModal() {
-      categoryNameInput.value = '';
-      categoryTypeSelect.value = 'receita';
-      modal.style.display = 'flex';
-      categoryNameInput.focus();
-    }
-
-    function closeModal() {
-      modal.style.display = 'none';
-    }
-
-    function confirmAddCategory() {
-      const name = categoryNameInput.value.trim();
-      const type = categoryTypeSelect.value;
-      if (!name) {
-        alert('Informe o nome da categoria.');
-        categoryNameInput.focus();
-        return;
-      }
-      const newKey = tableRef.push().key;
-      tableRef.child(newKey).set({ name, type });
-      closeModal();
-    }
-
-    // Fecha modal ao clicar fora do conteúdo
-    modal.addEventListener('click', (e) => {
-      if (e.target === modal) closeModal();
+      tbody.appendChild(row);
     });
 
-    // Listener Firebase
-    tableRef.on("value", (snapshot) => {
-      const data = snapshot.val() || {};
-      renderTable(data);
-    });
+    // Linha do saldo
+    const rowSaldo = document.createElement('tr');
+    const tdSaldoLabel = document.createElement('td');
+    tdSaldoLabel.textContent = "Saldo";
+    rowSaldo.appendChild(tdSaldoLabel);
 
-    // Inicializar tabela vazia caso não tenha dados
-    renderTable(lastData);
+    for (let i = 0; i < meses.length; i++) {
+      const td = document.createElement('td');
+      td.textContent = "0";
+      td.classList.add('saldo');
+      rowSaldo.appendChild(td);
+    }
+    tbody.appendChild(rowSaldo);
 
+    function calcularSaldo() {
+      const rows = tbody.querySelectorAll('tr');
+      const saldoRow = rows[rows.length - 1];
+      const saldos = new Array(meses.length).fill(0);
+
+      rows.forEach((row, i) => {
+        if (i === rows.length - 1) return; // pula saldo
+        const isReceita = row.firstChild.textContent.toLowerCase().includes('receita');
+        row.querySelectorAll('td:not(:first-child)').forEach((cell, j) => {
+          const val = parseFloat(cell.textContent) || 0;
+          saldos[j] += isReceita ? val : -val;
+        });
+      });
+
+      saldoRow.querySelectorAll('td:not(:first-child)').forEach((cell, i) => {
+        cell.textContent = saldos[i].toFixed(2);
+        cell.className = saldos[i] < 0 ? 'saldo-negativo' : 'saldo-positivo';
+      });
+    }
+
+    calcularSaldo();
   </script>
 </body>
 </html>
