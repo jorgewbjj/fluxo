@@ -3,7 +3,7 @@
 <html lang="pt-br">
 <head>
     <meta charset="UTF-8">
-    <title>Fluxo de Caixa Editável</title>
+    <title>Fluxo de Caixa Cumulativo</title>
     <script type="module">
         import { initializeApp } from "https://www.gstatic.com/firebasejs/9.22.2/firebase-app.js";
         import { 
@@ -15,6 +15,7 @@
             remove,
             get 
         } from "https://www.gstatic.com/firebasejs/9.22.2/firebase-database.js";
+
 
 const firebaseConfig = {
   apiKey: "AIzaSyCgSkYIvenfEzyjef50OD01Ox9et-nyBMo",
@@ -29,14 +30,11 @@ const firebaseConfig = {
         const app = initializeApp(firebaseConfig);
         const database = getDatabase(app);
 
-        // Elementos da UI
         const elements = {
-            categoriesList: document.getElementById('categoriesList'),
             balanceDiv: document.getElementById('balance'),
             loading: document.getElementById('loading')
         };
 
-        // Gerar 24 meses
         function generateMonths() {
             const months = [];
             const today = new Date();
@@ -48,62 +46,74 @@ const firebaseConfig = {
             return months;
         }
 
-        // Carregar dados
-        async function loadData() {
+        function getMonthName(monthString) {
+            const [year, month] = monthString.split('-');
+            const monthNames = [
+                'Janeiro', 'Fevereiro', 'Março', 'Abril', 'Maio', 'Junho',
+                'Julho', 'Agosto', 'Setembro', 'Outubro', 'Novembro', 'Dezembro'
+            ];
+            return `${monthNames[parseInt(month)-1]}/${year}`;
+        }
+
+        async function processFinancialData() {
             try {
                 const [categoriesSnap, transactionsSnap] = await Promise.all([
                     get(ref(database, 'categories')),
                     get(ref(database, 'transactions'))
                 ]);
                 
-                return {
-                    categories: categoriesSnap.val() || {},
-                    transactions: transactionsSnap.val() || {}
-                };
+                const categories = categoriesSnap.val() || {};
+                const transactions = transactionsSnap.val() || {};
+                const months = generateMonths();
+
+                const balanceData = initializeBalanceData(categories, months);
+                populateBalanceData(balanceData, transactions, categories, months);
+                calculateCumulativeBalances(balanceData, months);
+
+                return { balanceData, months };
             } catch (error) {
-                console.error('Erro ao carregar dados:', error);
+                console.error('Erro ao processar dados:', error);
                 throw error;
             }
         }
 
-        // Encontrar ou criar transação
-        async function findOrCreateTransaction(categoryId, month) {
-            const transactionsRef = ref(database, 'transactions');
-            const snapshot = await get(transactionsRef);
-            const transactions = snapshot.val() || {};
-
-            const existing = Object.entries(transactions).find(([_, t]) => 
-                t.category === categoryId && t.month === month
-            );
-
-            if (existing) return existing[0];
-
-            const newRef = push(transactionsRef);
-            await update(newRef, {
-                category: categoryId,
-                month: month,
-                amount: 0
+        function initializeBalanceData(categories, months) {
+            const balanceData = {};
+            Object.entries(categories).forEach(([catId, cat]) => {
+                balanceData[catId] = {
+                    name: cat.name,
+                    type: cat.type,
+                    months: Object.fromEntries(months.map(m => [m, 0])),
+                    cumulative: Object.fromEntries(months.map(m => [m, 0]))
+                };
             });
-            
-            return newRef.key;
+            return balanceData;
         }
 
-        // Edição de célula
-        async function handleCellEdit(categoryId, month, newValue) {
-            try {
-                const amount = parseFloat(newValue.replace(/[^0-9.,]/g, '').replace(',', '.'));
-                if (isNaN(amount)) throw new Error('Valor inválido');
+        function populateBalanceData(balanceData, transactions, categories, months) {
+            Object.values(transactions).forEach(transaction => {
+                const catId = transaction.category;
+                if (!balanceData[catId] || !months.includes(transaction.month)) return;
 
-                const transactionId = await findOrCreateTransaction(categoryId, month);
-                await update(ref(database, `transactions/${transactionId}`), { amount });
-            } catch (error) {
-                console.error('Erro ao salvar:', error);
-                alert('Digite um valor numérico válido');
-            }
+                const amount = categories[catId].type === 'income' 
+                    ? transaction.amount 
+                    : -transaction.amount;
+
+                balanceData[catId].months[transaction.month] += amount;
+            });
         }
 
-        // Renderizar tabela
-        function renderTable(categories, transactions, months) {
+        function calculateCumulativeBalances(balanceData, months) {
+            Object.values(balanceData).forEach(cat => {
+                let cumulative = 0;
+                months.forEach(month => {
+                    cumulative += cat.months[month];
+                    cat.cumulative[month] = cumulative;
+                });
+            });
+        }
+
+        function renderCashFlowTable(balanceData, months) {
             let html = `
                 <div class="table-container">
                     <table>
@@ -112,90 +122,68 @@ const firebaseConfig = {
                                 <th>Categoria</th>
                                 ${months.map(m => `
                                     <th class="month-header">
-                                        ${m.substring(5,7)}/${m.substring(2,4)}
+                                        ${getMonthName(m)}
                                     </th>
                                 `).join('')}
                             </tr>
                         </thead>
                         <tbody>
-            `;
+                            ${Object.values(balanceData).map(cat => `
+                                <tr>
+                                    <td class="category-cell ${cat.type}">
+                                        ${cat.name}
+                                        <button onclick="deleteCategory('${cat.id}')">🗑️</button>
+                                    </td>
+                                    ${months.map(month => `
+                                        <td class="value-cell">
+                                            ${formatCurrency(cat.cumulative[month])}
+                                        </td>
+                                    `).join('')}
+                                </tr>
+                            `).join('')}
+                            <tr class="totals-row">
+                                <th>Saldo Acumulado</th>
+                                ${calculateCumulativeTotals(balanceData, months)}
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>`;
 
-            Object.entries(categories).forEach(([catId, category]) => {
-                html += `
-                    <tr>
-                        <td class="category-cell ${category.type}">
-                            ${category.name}
-                            <button onclick="deleteCategory('${catId}')">🗑️</button>
-                        </td>
-                `;
-
-                months.forEach(month => {
-                    const transaction = Object.values(transactions).find(t => 
-                        t.category === catId && t.month === month
-                    );
-                    
-                    const value = transaction ? transaction.amount : 0;
-                    html += `
-                        <td class="editable-cell" 
-                            data-category="${catId}"
-                            data-month="${month}"
-                            contenteditable="true"
-                        >${value.toFixed(2)}</td>
-                    `;
-                });
-
-                html += `</tr>`;
-            });
-
-            html += `</tbody></table></div>`;
             elements.balanceDiv.innerHTML = html;
-
-            // Adicionar eventos de edição
-            document.querySelectorAll('.editable-cell').forEach(cell => {
-                cell.addEventListener('blur', (e) => {
-                    const categoryId = e.target.dataset.category;
-                    const month = e.target.dataset.month;
-                    const newValue = e.target.textContent;
-                    handleCellEdit(categoryId, month, newValue);
-                });
-            });
         }
 
-        // Funções CRUD
-        window.addCategory = async () => {
-            const name = prompt('Nome da nova categoria:');
-            const type = prompt('Tipo (income/expense):');
-            
-            if (name && type) {
-                await push(ref(database, 'categories'), { name, type });
-            }
-        };
+        function calculateCumulativeTotals(balanceData, months) {
+            let cumulativeTotal = 0;
+            return months.map(month => {
+                const monthlyTotal = Object.values(balanceData).reduce((sum, cat) => 
+                    sum + cat.months[month], 0);
+                cumulativeTotal += monthlyTotal;
+                return `<td class="total-cell">${formatCurrency(cumulativeTotal)}</td>`;
+            }).join('');
+        }
+
+        function formatCurrency(value) {
+            return new Intl.NumberFormat('pt-BR', {
+                style: 'currency',
+                currency: 'BRL'
+            }).format(value);
+        }
 
         window.deleteCategory = async (catId) => {
-            if (confirm('Excluir esta categoria e todas suas transações?')) {
+            if (confirm('Excluir categoria e todas as transações relacionadas?')) {
                 await remove(ref(database, `categories/${catId}`));
-                
-                // Excluir transações relacionadas
                 const transactions = await get(ref(database, 'transactions'));
                 Object.entries(transactions.val() || {}).forEach(async ([key, t]) => {
-                    if (t.category === catId) {
-                        await remove(ref(database, `transactions/${key}`));
-                    }
+                    if (t.category === catId) await remove(ref(database, `transactions/${key}`));
                 });
             }
         };
 
-        // Inicialização
         window.addEventListener('DOMContentLoaded', async () => {
             try {
                 elements.loading.style.display = 'block';
-                
-                onValue(ref(database, 'categories'), async () => {
-                    const { categories, transactions } = await loadData();
-                    const months = generateMonths();
-                    renderTable(categories, transactions, months);
-                });
-
+                const { balanceData, months } = await processFinancialData();
+                renderCashFlowTable(balanceData, months);
                 elements.loading.style.display = 'none';
             } catch (error) {
                 console.error('Erro na inicialização:', error);
@@ -230,7 +218,7 @@ const firebaseConfig = {
             padding: 12px;
             border: 1px solid #ddd;
             text-align: center;
-            min-width: 100px;
+            min-width: 120px;
         }
 
         th {
@@ -249,21 +237,20 @@ const firebaseConfig = {
             position: sticky;
             left: 0;
             z-index: 2;
+            text-align: left;
         }
 
-        .editable-cell {
-            cursor: cell;
-            background: #fff;
-            transition: background 0.2s;
-        }
-
-        .editable-cell:focus {
-            background: #f0f8ff;
-            outline: 2px solid var(--primary-color);
+        .value-cell, .total-cell {
+            font-family: monospace;
         }
 
         .income { border-left: 4px solid #4CAF50; }
         .expense { border-left: 4px solid #F44336; }
+
+        .totals-row {
+            background-color: #f8f9fa;
+            font-weight: bold;
+        }
 
         button {
             background: none;
@@ -289,14 +276,6 @@ const firebaseConfig = {
 </head>
 <body>
     <div id="loading">Carregando...</div>
-    
-    <div class="container">
-        <div style="margin-bottom: 20px;">
-            <button onclick="addCategory()" style="padding: 10px 20px; background: #4CAF50; color: white;">
-                ➕ Nova Categoria
-            </button>
-        </div>
-        <div id="balance"></div>
-    </div>
+    <div id="balance"></div>
 </body>
 </html>
