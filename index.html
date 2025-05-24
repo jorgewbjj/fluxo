@@ -19,12 +19,14 @@
         <thead class="bg-gray-200 text-gray-600 uppercase text-xs">
           <tr id="header-row">
             <th class="py-3 px-4 text-left">Categoria</th>
+            <!-- Meses adicionados via JS -->
           </tr>
         </thead>
         <tbody id="table-body"></tbody>
         <tfoot class="bg-gray-100 font-semibold text-sm">
           <tr id="saldo-row">
             <td class="py-2 px-4">Saldo</td>
+            <!-- Saldos mensais inseridos via JS -->
           </tr>
         </tfoot>
       </table>
@@ -121,7 +123,7 @@ const firebaseConfig = {
           labels: months,
           datasets: [
             {
-              label: 'Saldo Mensal Acumulado',
+              label: 'Saldo Mensal',
               data: saldos,
               borderColor: 'rgba(59,130,246,1)',
               backgroundColor: 'rgba(59,130,246,0.2)',
@@ -134,7 +136,7 @@ const firebaseConfig = {
           responsive: true,
           plugins: {
             legend: { position: 'top' },
-            title: { display: true, text: 'Saldo Acumulado nos Próximos 24 Meses' }
+            title: { display: true, text: 'Saldo Mensal nos Próximos 24 Meses' }
           }
         }
       });
@@ -174,29 +176,18 @@ const firebaseConfig = {
         const data = snapshot.val() || {};
         const values = data.values || {};
         const categories = data.categories || {};
-        const receitas = {};
-        const despesas = {};
         const saldos = {};
 
         months.forEach(month => {
-          receitas[month] = 0;
-          despesas[month] = 0;
+          saldos[month] = 0;
         });
 
         Object.entries(values).forEach(([catId, meses]) => {
           const tipo = categories[catId]?.type || "Receita";
           months.forEach(month => {
             const val = parseFloat(meses[month]) || 0;
-            if (tipo === "Receita") receitas[month] += val;
-            else despesas[month] += val;
+            saldos[month] += (tipo === "Despesa" ? -val : val);
           });
-        });
-
-        let acumulado = 0;
-        months.forEach(month => {
-          const resultadoMes = receitas[month] - despesas[month];
-          acumulado += resultadoMes;
-          saldos[month] = acumulado;
         });
 
         updateSaldoRow(saldos);
