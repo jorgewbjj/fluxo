@@ -2,7 +2,7 @@
 <html lang="pt-br">
 <head>
     <meta charset="UTF-8">
-    <title>Planilha Financeira - 24 Meses</title>
+    <title>Planilha Financeira Interativa</title>
     <style>
         table {
             border-collapse: collapse;
@@ -23,6 +23,7 @@
         .categoria {
             text-align: left;
             background-color: #e6f3ff;
+            cursor: pointer;
         }
         
         input {
@@ -35,52 +36,129 @@
             background-color: #ffe6e6;
             font-weight: bold;
         }
+        
+        .modal {
+            display: none;
+            position: fixed;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            padding: 20px;
+            background: white;
+            border: 1px solid #ccc;
+            z-index: 1000;
+        }
+        
+        .controles-categoria {
+            display: flex;
+            gap: 5px;
+        }
+        
+        .controles-categoria button {
+            padding: 2px 5px;
+            cursor: pointer;
+        }
     </style>
 </head>
 <body>
+    <button onclick="mostrarModal()">Adicionar Categoria</button>
+    
     <table id="planilha">
         <tr>
             <th class="categoria">Categoria</th>
-            <!-- Meses serão inseridos aqui via JavaScript -->
-        </tr>
-        
-        <!-- Categorias de Gastos -->
-        <tr>
-            <td class="categoria">Aluguel</td>
-        </tr>
-        <tr>
-            <td class="categoria">Alimentação</td>
-        </tr>
-        <tr>
-            <td class="categoria">Transporte</td>
-        </tr>
-        <tr>
-            <td class="categoria">Saúde</td>
-        </tr>
-        <tr>
-            <td class="categoria">Lazer</td>
-        </tr>
-        <tr>
-            <td class="categoria">Educação</td>
-        </tr>
-        <tr>
-            <td class="categoria">Impostos</td>
-        </tr>
-        <tr>
-            <td class="categoria">Serviços</td>
-        </tr>
-        <tr>
-            <td class="categoria">Outros</td>
-        </tr>
-        
-        <!-- Linha de Total -->
-        <tr>
-            <td class="categoria total">Total por Mês</td>
         </tr>
     </table>
 
+    <div id="modalCategoria" class="modal">
+        <h3>Nova Categoria</h3>
+        <input type="text" id="nomeCategoria" placeholder="Nome da categoria">
+        <select id="tipoCategoria">
+            <option value="despesa">Despesa</option>
+            <option value="receita">Receita</option>
+        </select>
+        <button onclick="adicionarCategoria()">Salvar</button>
+        <button onclick="fecharModal()">Cancelar</button>
+    </div>
+
     <script>
-        // Função para criar os meses
+        let categorias = [];
+        
+        function mostrarModal() {
+            document.getElementById('modalCategoria').style.display = 'block';
+        }
+        
+        function fecharModal() {
+            document.getElementById('modalCategoria').style.display = 'none';
+        }
+        
+        function adicionarCategoria() {
+            const nome = document.getElementById('nomeCategoria').value;
+            const tipo = document.getElementById('tipoCategoria').value;
+            
+            if(nome) {
+                categorias.push({
+                    nome: nome,
+                    tipo: tipo
+                });
+                atualizarTabela();
+                fecharModal();
+            }
+        }
+        
+        function editarCategoria(index) {
+            const novoNome = prompt('Editar categoria:', categorias[index].nome);
+            if(novoNome) {
+                categorias[index].nome = novoNome;
+                atualizarTabela();
+            }
+        }
+        
+        function moverCategoria(index, direcao) {
+            if((direcao === -1 && index > 0) || (direcao === 1 && index < categorias.length - 1)) {
+                [categorias[index], categorias[index + direcao]] = [categorias[index + direcao], categorias[index]];
+                atualizarTabela();
+            }
+        }
+        
+        function excluirCategoria(index) {
+            if(confirm('Tem certeza que deseja excluir esta categoria?')) {
+                categorias.splice(index, 1);
+                atualizarTabela();
+            }
+        }
+        
+        function atualizarTabela() {
+            const tabela = document.getElementById('planilha');
+            // Limpar tabela
+            while(tabela.rows.length > 1) {
+                tabela.deleteRow(1);
+            }
+            
+            // Adicionar categorias
+            categorias.forEach((categoria, index) => {
+                const row = tabela.insertRow();
+                const cell = row.insertCell();
+                cell.className = 'categoria';
+                cell.innerHTML = `
+                    <div class="controles-categoria">
+                        <span>${categoria.nome}</span>
+                        <button onclick="editarCategoria(${index})">✏️</button>
+                        <button onclick="excluirCategoria(${index})">🗑️</button>
+                        <button onclick="moverCategoria(${index}, -1)">⬆️</button>
+                        <button onclick="moverCategoria(${index}, 1)">⬇️</button>
+                    </div>
+                `;
+                cell.dataset.tipo = categoria.tipo;
+            });
+            
+            // Adicionar linha de total
+            const totalRow = tabela.insertRow();
+            totalRow.innerHTML = '<td class="total">Total</td>';
+            
+            criarMeses();
+            calcularTotais();
+        }
+        
         function criarMeses() {
             const tabela = document.getElementById('planilha');
             const data = new Date();
@@ -92,11 +170,14 @@
                 }).replace('/', '/');
                 
                 // Adicionar cabeçalho do mês
-                const th = document.createElement('th');
-                th.textContent = mesAno;
-                tabela.rows[0].appendChild(th);
+                if(i === 0) {
+                    const headerRow = tabela.rows[0];
+                    const th = document.createElement('th');
+                    th.textContent = mesAno;
+                    headerRow.appendChild(th);
+                }
                 
-                // Adicionar campos de entrada para cada categoria
+                // Adicionar campos de entrada
                 for(let j = 1; j < tabela.rows.length - 1; j++) {
                     const td = document.createElement('td');
                     td.innerHTML = `<input type="number" step="0.01" class="valor">`;
@@ -112,8 +193,7 @@
                 data.setMonth(data.getMonth() + 1);
             }
         }
-
-        // Função para calcular totais
+        
         function calcularTotais() {
             const inputs = document.querySelectorAll('.valor');
             
@@ -122,20 +202,33 @@
                     const indexMes = input.parentElement.cellIndex - 1;
                     const totalMes = document.getElementById(`total-${indexMes}`);
                     
-                    let total = 0;
-                    document.querySelectorAll(`tr td:nth-child(${indexMes + 2}) input`).forEach(input => {
-                        total += parseFloat(input.value) || 0;
+                    let totalDespesas = 0;
+                    let totalReceitas = 0;
+                    
+                    document.querySelectorAll(`tr td:nth-child(${indexMes + 2}) input`).forEach((input, idx) => {
+                        const tipo = categorias[idx]?.tipo || 'despesa';
+                        const valor = parseFloat(input.value) || 0;
+                        
+                        if(tipo === 'despesa') {
+                            totalDespesas += valor;
+                        } else {
+                            totalReceitas += valor;
+                        }
                     });
                     
-                    totalMes.textContent = total.toFixed(2);
+                    totalMes.textContent = (totalReceitas - totalDespesas).toFixed(2);
                 });
             });
         }
 
-        // Inicializar
         window.onload = function() {
-            criarMeses();
-            calcularTotais();
+            // Categorias iniciais
+            categorias = [
+                {nome: 'Aluguel', tipo: 'despesa'},
+                {nome: 'Salário', tipo: 'receita'},
+                {nome: 'Transporte', tipo: 'despesa'}
+            ];
+            atualizarTabela();
         };
     </script>
 </body>
