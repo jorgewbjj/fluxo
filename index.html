@@ -2,7 +2,7 @@
 <html lang="pt-br">
 <head>
     <meta charset="UTF-8">
-    <title>Planilha Financeira Avançada</title>
+    <title>Planilha Financeira com Acumulado</title>
     <style>
         :root {
             --cor-primaria: #2c3e50;
@@ -74,9 +74,14 @@
         }
 
         .total {
-            background-color: #f8f9fa;
+            background-color: #ffe6e6;
             font-weight: 600;
-            color: var(--cor-primaria);
+        }
+
+        .acumulado {
+            background-color: #e8f5e9;
+            font-weight: 600;
+            color: #2e7d32;
         }
 
         .modal {
@@ -257,8 +262,13 @@
                 cell.dataset.tipo = categoria.tipo;
             });
             
+            // Linha de Total
             const totalRow = tabela.insertRow();
             totalRow.innerHTML = '<td class="total">Total</td>';
+            
+            // Linha de Acumulado
+            const acumuladoRow = tabela.insertRow();
+            acumuladoRow.innerHTML = '<td class="acumulado">Acumulado</td>';
             
             criarMeses();
             calcularTotais();
@@ -279,20 +289,29 @@
                     year: 'numeric'
                 }).replace('/', '/');
                 
+                // Cabeçalho do mês
                 const th = document.createElement('th');
                 th.textContent = mesAno;
                 headerRow.appendChild(th);
                 
-                for(let j = 1; j < tabela.rows.length - 1; j++) {
+                // Células para categorias
+                for(let j = 1; j <= categorias.length; j++) {
                     const td = document.createElement('td');
                     td.innerHTML = `<input type="number" step="0.01" class="valor">`;
                     tabela.rows[j].appendChild(td);
                 }
                 
+                // Célula de Total
                 const tdTotal = document.createElement('td');
                 tdTotal.className = 'total';
                 tdTotal.id = `total-${i}`;
-                tabela.rows[tabela.rows.length - 1].appendChild(tdTotal);
+                tabela.rows[tabela.rows.length - 2].appendChild(tdTotal);
+                
+                // Célula de Acumulado
+                const tdAcumulado = document.createElement('td');
+                tdAcumulado.className = 'acumulado';
+                tdAcumulado.id = `acumulado-${i}`;
+                tabela.rows[tabela.rows.length - 1].appendChild(tdAcumulado);
                 
                 data.setMonth(data.getMonth() + 1);
             }
@@ -321,6 +340,16 @@
                     });
                     
                     totalMes.textContent = (totalReceitas - totalDespesas).toFixed(2);
+                    
+                    // Calcular acumulado
+                    for(let m = 0; m < 24; m++) {
+                        let acumulado = 0;
+                        for(let n = 0; n <= m; n++) {
+                            const totalElement = document.getElementById(`total-${n}`);
+                            acumulado += parseFloat(totalElement.textContent) || 0;
+                        }
+                        document.getElementById(`acumulado-${m}`).textContent = acumulado.toFixed(2);
+                    }
                 });
             });
         }
