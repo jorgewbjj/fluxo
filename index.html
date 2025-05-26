@@ -2,7 +2,8 @@
 <html lang="pt-br">
 <head>
     <meta charset="UTF-8">
-    <title>Planilha Financeira com Acumulado</title>
+    <title>Planilha Financeira Completa</title>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <style>
         :root {
             --cor-primaria: #2c3e50;
@@ -82,6 +83,19 @@
             background-color: #e8f5e9;
             font-weight: 600;
             color: #2e7d32;
+        }
+
+        .negative {
+            color: #c0392b;
+        }
+
+        .grafico-container {
+            margin-top: 40px;
+            max-width: 1000px;
+            padding: 20px;
+            background: white;
+            border-radius: 8px;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.1);
         }
 
         .modal {
@@ -171,6 +185,10 @@
         </table>
     </div>
 
+    <div class="grafico-container">
+        <canvas id="graficoAcumulado"></canvas>
+    </div>
+
     <div id="modalCategoria" class="modal">
         <h3>➕ Nova Categoria</h3>
         <input type="text" id="nomeCategoria" placeholder="Nome da categoria">
@@ -185,6 +203,7 @@
     <script>
         let mostrarControles = true;
         let categorias = [];
+        let myChart = null;
 
         function toggleControls() {
             mostrarControles = !mostrarControles;
@@ -240,6 +259,15 @@
             }
         }
 
+        function formatarMoeda(valor) {
+            const numero = typeof valor === 'string' ? 
+                parseFloat(valor.replace('R$ ', '').replace('.', '').replace(',', '.')) : valor;
+            return 'R$ ' + numero.toLocaleString('pt-BR', {
+                minimumFractionDigits: 2,
+                maximumFractionDigits: 2
+            });
+        }
+
         function atualizarTabela() {
             const tabela = document.getElementById('planilha');
             while(tabela.rows.length > 1) {
@@ -262,11 +290,9 @@
                 cell.dataset.tipo = categoria.tipo;
             });
             
-            // Linha de Total
+            // Linhas de Total e Acumulado
             const totalRow = tabela.insertRow();
             totalRow.innerHTML = '<td class="total">Total</td>';
-            
-            // Linha de Acumulado
             const acumuladoRow = tabela.insertRow();
             acumuladoRow.innerHTML = '<td class="acumulado">Acumulado</td>';
             
@@ -289,25 +315,28 @@
                     year: 'numeric'
                 }).replace('/', '/');
                 
-                // Cabeçalho do mês
                 const th = document.createElement('th');
                 th.textContent = mesAno;
                 headerRow.appendChild(th);
                 
-                // Células para categorias
+                // Células de valores
                 for(let j = 1; j <= categorias.length; j++) {
                     const td = document.createElement('td');
-                    td.innerHTML = `<input type="number" step="0.01" class="valor">`;
+                    const input = document.createElement('input');
+                    input.type = 'number';
+                    input.step = '0.01';
+                    input.className = 'valor';
+                    input.addEventListener('focus', (e) => e.target.select());
+                    td.appendChild(input);
                     tabela.rows[j].appendChild(td);
                 }
                 
-                // Célula de Total
+                // Células de Total e Acumulado
                 const tdTotal = document.createElement('td');
                 tdTotal.className = 'total';
                 tdTotal.id = `total-${i}`;
                 tabela.rows[tabela.rows.length - 2].appendChild(tdTotal);
                 
-                // Célula de Acumulado
                 const tdAcumulado = document.createElement('td');
                 tdAcumulado.className = 'acumulado';
                 tdAcumulado.id = `acumulado-${i}`;
@@ -315,6 +344,55 @@
                 
                 data.setMonth(data.getMonth() + 1);
             }
+        }
+
+        function atualizarGrafico() {
+            const acumulados = [];
+            for(let m = 0; m < 24; m++) {
+                const acumuladoElement = document.getElementById(`acumulado-${m}`);
+                acumulados.push(parseFloat(acumuladoElement.textContent.replace(/[^0-9,-]/g, '').replace(',', '.')) || 0);
+            }
+
+            if(myChart) {
+                myChart.destroy();
+            }
+
+            const ctx = document.getElementById('graficoAcumulado').getContext('2d');
+            myChart = new Chart(ctx, {
+                type: 'line',
+                data: {
+                    labels: Array.from({length: 24}, (_, i) => `Mês ${i+1}`),
+                    datasets: [{
+                        label: 'Acumulado',
+                        data: acumulados,
+                        borderColor: '#3498db',
+                        borderWidth: 2,
+                        tension: 0.4,
+                        fill: false
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    plugins: {
+                        tooltip: {
+                            callbacks: {
+                                label: function(context) {
+                                    return formatarMoeda(context.raw);
+                                }
+                            }
+                        }
+                    },
+                    scales: {
+                        y: {
+                            ticks: {
+                                callback: function(value) {
+                                    return formatarMoeda(value);
+                                }
+                            }
+                        }
+                    }
+                }
+            });
         }
 
         function calcularTotais() {
@@ -339,17 +417,22 @@
                         }
                     });
                     
-                    totalMes.textContent = (totalReceitas - totalDespesas).toFixed(2);
+                    const saldo = totalReceitas - totalDespesas;
+                    totalMes.textContent = formatarMoeda(saldo);
+                    totalMes.classList.toggle('negative', saldo < 0);
                     
                     // Calcular acumulado
+                    let acumuladoTotal = 0;
                     for(let m = 0; m < 24; m++) {
-                        let acumulado = 0;
-                        for(let n = 0; n <= m; n++) {
-                            const totalElement = document.getElementById(`total-${n}`);
-                            acumulado += parseFloat(totalElement.textContent) || 0;
-                        }
-                        document.getElementById(`acumulado-${m}`).textContent = acumulado.toFixed(2);
+                        const totalElement = document.getElementById(`total-${m}`);
+                        const valorTotal = parseFloat(totalElement.textContent.replace(/[^0-9,-]/g, '').replace(',', '.')) || 0;
+                        acumuladoTotal += valorTotal;
+                        const acumuladoElement = document.getElementById(`acumulado-${m}`);
+                        acumuladoElement.textContent = formatarMoeda(acumuladoTotal);
+                        acumuladoElement.classList.toggle('negative', acumuladoTotal < 0);
                     }
+                    
+                    atualizarGrafico();
                 });
             });
         }
