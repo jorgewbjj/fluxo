@@ -2,13 +2,94 @@
 <html lang="pt-br">
 <head>
     <meta charset="UTF-8">
-    <title>Planilha Financeira Moderna</title>
+    <title>Planilha Financeira Avançada</title>
     <style>
-        /* ... (manter o mesmo CSS anterior) ... */
+        :root {
+            --cor-primaria: #2c3e50;
+            --cor-secundaria: #3498db;
+            --cor-fundo: #f8f9fa;
+            --cor-texto: #34495e;
+            --borda: #ecf0f1;
+        }
 
-        .nome-categoria {
-            display: inline-block;
-            padding-right: 10px;
+        body {
+            font-family: 'Segoe UI', sans-serif;
+            margin: 0;
+            padding: 20px;
+            background-color: var(--cor-fundo);
+            color: var(--cor-texto);
+        }
+
+        .container {
+            max-width: 100%;
+            overflow-x: auto;
+        }
+
+        table {
+            border-collapse: collapse;
+            margin: 20px 0;
+            min-width: 800px;
+            background: white;
+            border-radius: 8px;
+            overflow: hidden;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+        }
+
+        th, td {
+            border: 1px solid var(--borda);
+            padding: 12px;
+            text-align: center;
+            min-width: 120px;
+        }
+
+        th {
+            background-color: var(--cor-primaria);
+            color: white;
+            font-weight: 500;
+        }
+
+        .categoria {
+            text-align: left;
+            background-color: #f8f9fa;
+            transition: background-color 0.2s;
+        }
+
+        .categoria:hover {
+            background-color: #f1f3f5;
+        }
+
+        input {
+            width: 100px;
+            padding: 6px;
+            border: 1px solid var(--borda);
+            border-radius: 4px;
+            text-align: right;
+            transition: border-color 0.2s;
+        }
+
+        input:focus {
+            outline: none;
+            border-color: var(--cor-secundaria);
+            box-shadow: 0 0 0 2px rgba(52,152,219,0.1);
+        }
+
+        .total {
+            background-color: #f8f9fa;
+            font-weight: 600;
+            color: var(--cor-primaria);
+        }
+
+        .modal {
+            display: none;
+            position: fixed;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            padding: 25px;
+            background: white;
+            border-radius: 8px;
+            box-shadow: 0 5px 15px rgba(0,0,0,0.2);
+            z-index: 1000;
         }
 
         .controles-categoria {
@@ -22,45 +103,160 @@
             display: none;
         }
 
-        .modo-visualizacao .nome-categoria {
-            width: 100%;
-            padding: 0;
+        .nome-categoria {
+            display: inline-block;
+            min-width: 120px;
+            padding-right: 10px;
+        }
+
+        button {
+            padding: 8px 16px;
+            border: none;
+            border-radius: 4px;
+            background-color: var(--cor-secundaria);
+            color: white;
+            cursor: pointer;
+            transition: background-color 0.2s;
+        }
+
+        button:hover {
+            background-color: #2980b9;
+        }
+
+        .toggle-controls {
+            position: sticky;
+            left: 20px;
+            margin-bottom: 10px;
+            background-color: var(--cor-secundaria);
+        }
+
+        .controles-categoria button {
+            padding: 4px 8px;
+            font-size: 0.85em;
+            background-color: #95a5a6;
+        }
+
+        .controles-categoria button:hover {
+            background-color: #7f8c8d;
+        }
+
+        .modal h3 {
+            margin-top: 0;
+            color: var(--cor-primaria);
+        }
+
+        #nomeCategoria {
+            margin: 10px 0;
+            padding: 8px;
+            width: 200px;
+            border: 1px solid var(--borda);
+            border-radius: 4px;
         }
     </style>
 </head>
 <body>
-    <!-- ... (manter o mesmo HTML anterior) ... -->
+    <button class="toggle-controls" onclick="toggleControls()">Ocultar Controles</button>
+    <button onclick="mostrarModal()">Nova Categoria</button>
+    
+    <div class="container">
+        <table id="planilha">
+            <tr>
+                <th class="categoria">Categoria</th>
+            </tr>
+        </table>
+    </div>
+
+    <div id="modalCategoria" class="modal">
+        <h3>➕ Nova Categoria</h3>
+        <input type="text" id="nomeCategoria" placeholder="Nome da categoria">
+        <select id="tipoCategoria">
+            <option value="despesa">Despesa</option>
+            <option value="receita">Receita</option>
+        </select>
+        <button onclick="adicionarCategoria()">Salvar</button>
+        <button onclick="fecharModal()">Cancelar</button>
+    </div>
 
     <script>
-        // ... (manter as mesmas variáveis e funções anteriores) ... 
+        let mostrarControles = true;
+        let categorias = [];
+
+        function toggleControls() {
+            mostrarControles = !mostrarControles;
+            document.querySelectorAll('.controles-categoria').forEach(div => {
+                div.classList.toggle('hidden', !mostrarControles);
+            });
+            document.querySelector('.toggle-controls').textContent = 
+                mostrarControles ? 'Ocultar Controles' : 'Mostrar Controles';
+        }
+
+        function mostrarModal() {
+            document.getElementById('modalCategoria').style.display = 'block';
+        }
+
+        function fecharModal() {
+            document.getElementById('modalCategoria').style.display = 'none';
+        }
+
+        function adicionarCategoria() {
+            const nome = document.getElementById('nomeCategoria').value;
+            const tipo = document.getElementById('tipoCategoria').value;
+            
+            if(nome) {
+                categorias.push({
+                    nome: nome,
+                    tipo: tipo
+                });
+                atualizarTabela();
+                fecharModal();
+                document.getElementById('nomeCategoria').value = '';
+            }
+        }
+
+        function editarCategoria(index) {
+            const novoNome = prompt('Editar categoria:', categorias[index].nome);
+            if(novoNome) {
+                categorias[index].nome = novoNome;
+                atualizarTabela();
+            }
+        }
+
+        function moverCategoria(index, direcao) {
+            if((direcao === -1 && index > 0) || (direcao === 1 && index < categorias.length - 1)) {
+                [categorias[index], categorias[index + direcao]] = [categorias[index + direcao], categorias[index]];
+                atualizarTabela();
+            }
+        }
+
+        function excluirCategoria(index) {
+            if(confirm('Tem certeza que deseja excluir esta categoria?')) {
+                categorias.splice(index, 1);
+                atualizarTabela();
+            }
+        }
 
         function atualizarTabela() {
             const tabela = document.getElementById('planilha');
-            // Limpar tabela
             while(tabela.rows.length > 1) {
                 tabela.deleteRow(1);
             }
             
-            // Adicionar categorias
             categorias.forEach((categoria, index) => {
                 const row = tabela.insertRow();
                 const cell = row.insertCell();
                 cell.className = 'categoria';
                 cell.innerHTML = `
-                    <div class="${mostrarControles ? '' : 'modo-visualizacao'}">
-                        <span class="nome-categoria">${categoria.nome}</span>
-                        <span class="controles-categoria ${mostrarControles ? '' : 'hidden'}">
-                            <button onclick="editarCategoria(${index})">✏️</button>
-                            <button onclick="excluirCategoria(${index})">🗑️</button>
-                            <button onclick="moverCategoria(${index}, -1)">⬆️</button>
-                            <button onclick="moverCategoria(${index}, 1)">⬇️</button>
-                        </span>
-                    </div>
+                    <span class="nome-categoria">${categoria.nome}</span>
+                    <span class="controles-categoria ${mostrarControles ? '' : 'hidden'}">
+                        <button onclick="editarCategoria(${index})">✏️</button>
+                        <button onclick="excluirCategoria(${index})">🗑️</button>
+                        <button onclick="moverCategoria(${index}, -1)">⬆️</button>
+                        <button onclick="moverCategoria(${index}, 1)">⬇️</button>
+                    </span>
                 `;
                 cell.dataset.tipo = categoria.tipo;
             });
             
-            // Adicionar linha de total
             const totalRow = tabela.insertRow();
             totalRow.innerHTML = '<td class="total">Total</td>';
             
@@ -68,19 +264,75 @@
             calcularTotais();
         }
 
-        function toggleControls() {
-            mostrarControles = !mostrarControles;
-            document.querySelectorAll('.controles-categoria').forEach(div => {
-                div.classList.toggle('hidden', !mostrarControles);
-            });
-            document.querySelectorAll('.categoria > div').forEach(div => {
-                div.classList.toggle('modo-visualizacao', !mostrarControles);
-            });
-            document.querySelector('.toggle-controls').textContent = 
-                mostrarControles ? 'Ocultar Controles' : 'Mostrar Controles';
+        function criarMeses() {
+            const tabela = document.getElementById('planilha');
+            const headerRow = tabela.rows[0];
+            
+            while(headerRow.cells.length > 1) {
+                headerRow.deleteCell(1);
+            }
+            
+            const data = new Date();
+            for(let i = 0; i < 24; i++) {
+                const mesAno = data.toLocaleDateString('pt-BR', {
+                    month: '2-digit',
+                    year: 'numeric'
+                }).replace('/', '/');
+                
+                const th = document.createElement('th');
+                th.textContent = mesAno;
+                headerRow.appendChild(th);
+                
+                for(let j = 1; j < tabela.rows.length - 1; j++) {
+                    const td = document.createElement('td');
+                    td.innerHTML = `<input type="number" step="0.01" class="valor">`;
+                    tabela.rows[j].appendChild(td);
+                }
+                
+                const tdTotal = document.createElement('td');
+                tdTotal.className = 'total';
+                tdTotal.id = `total-${i}`;
+                tabela.rows[tabela.rows.length - 1].appendChild(tdTotal);
+                
+                data.setMonth(data.getMonth() + 1);
+            }
         }
 
-        // ... (manter o resto do JavaScript anterior) ...
+        function calcularTotais() {
+            const inputs = document.querySelectorAll('.valor');
+            
+            inputs.forEach(input => {
+                input.addEventListener('input', () => {
+                    const indexMes = input.parentElement.cellIndex - 1;
+                    const totalMes = document.getElementById(`total-${indexMes}`);
+                    
+                    let totalDespesas = 0;
+                    let totalReceitas = 0;
+                    
+                    document.querySelectorAll(`tr td:nth-child(${indexMes + 2}) input`).forEach((input, idx) => {
+                        const tipo = categorias[idx]?.tipo || 'despesa';
+                        const valor = parseFloat(input.value) || 0;
+                        
+                        if(tipo === 'despesa') {
+                            totalDespesas += valor;
+                        } else {
+                            totalReceitas += valor;
+                        }
+                    });
+                    
+                    totalMes.textContent = (totalReceitas - totalDespesas).toFixed(2);
+                });
+            });
+        }
+
+        window.onload = function() {
+            categorias = [
+                {nome: 'Aluguel', tipo: 'despesa'},
+                {nome: 'Salário', tipo: 'receita'},
+                {nome: 'Transporte', tipo: 'despesa'}
+            ];
+            atualizarTabela();
+        };
     </script>
 </body>
 </html>
