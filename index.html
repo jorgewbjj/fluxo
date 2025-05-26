@@ -47,31 +47,28 @@
             background-color: var(--cor-primaria);
             color: white;
             font-weight: 500;
+            position: sticky;
+            left: 0;
+            z-index: 2;
         }
 
         .categoria {
             text-align: left;
             background-color: #f8f9fa;
             transition: background-color 0.2s;
+            position: sticky;
+            left: 0;
+            z-index: 1;
         }
 
         .categoria:hover {
             background-color: #f1f3f5;
         }
 
-        input {
-            width: 100px;
-            padding: 6px;
-            border: 1px solid var(--borda);
-            border-radius: 4px;
-            text-align: right;
-            transition: border-color 0.2s;
-        }
-
-        input:focus {
-            outline: none;
-            border-color: var(--cor-secundaria);
-            box-shadow: 0 0 0 2px rgba(52,152,219,0.1);
+        .total, .acumulado {
+            position: sticky;
+            left: 0;
+            z-index: 1;
         }
 
         .total {
@@ -87,6 +84,21 @@
 
         .negative {
             color: #c0392b;
+        }
+
+        input {
+            width: 100px;
+            padding: 6px;
+            border: 1px solid var(--borda);
+            border-radius: 4px;
+            text-align: right;
+            transition: border-color 0.2s;
+        }
+
+        input:focus {
+            outline: none;
+            border-color: var(--cor-secundaria);
+            box-shadow: 0 0 0 2px rgba(52,152,219,0.1);
         }
 
         .grafico-container {
@@ -114,8 +126,6 @@
         .controles-categoria {
             display: inline-flex;
             gap: 8px;
-            opacity: 1;
-            transition: opacity 0.2s;
         }
 
         .controles-categoria.hidden {
@@ -147,29 +157,6 @@
             left: 20px;
             margin-bottom: 10px;
             background-color: var(--cor-secundaria);
-        }
-
-        .controles-categoria button {
-            padding: 4px 8px;
-            font-size: 0.85em;
-            background-color: #95a5a6;
-        }
-
-        .controles-categoria button:hover {
-            background-color: #7f8c8d;
-        }
-
-        .modal h3 {
-            margin-top: 0;
-            color: var(--cor-primaria);
-        }
-
-        #nomeCategoria {
-            margin: 10px 0;
-            padding: 8px;
-            width: 200px;
-            border: 1px solid var(--borda);
-            border-radius: 4px;
         }
     </style>
 </head>
@@ -204,6 +191,10 @@
         let mostrarControles = true;
         let categorias = [];
         let myChart = null;
+        const meses = [
+            'Janeiro', 'Fevereiro', 'Março', 'Abril', 'Maio', 'Junho',
+            'Julho', 'Agosto', 'Setembro', 'Outubro', 'Novembro', 'Dezembro'
+        ];
 
         function toggleControls() {
             mostrarControles = !mostrarControles;
@@ -261,7 +252,7 @@
 
         function formatarMoeda(valor) {
             const numero = typeof valor === 'string' ? 
-                parseFloat(valor.replace('R$ ', '').replace('.', '').replace(',', '.')) : valor;
+                parseFloat(valor.replace('R$ ', '').replace(/\./g, '').replace(',', '.')) : valor;
             return 'R$ ' + numero.toLocaleString('pt-BR', {
                 minimumFractionDigits: 2,
                 maximumFractionDigits: 2
@@ -287,10 +278,8 @@
                         <button onclick="moverCategoria(${index}, 1)">⬇️</button>
                     </span>
                 `;
-                cell.dataset.tipo = categoria.tipo;
             });
             
-            // Linhas de Total e Acumulado
             const totalRow = tabela.insertRow();
             totalRow.innerHTML = '<td class="total">Total</td>';
             const acumuladoRow = tabela.insertRow();
@@ -310,16 +299,12 @@
             
             const data = new Date();
             for(let i = 0; i < 24; i++) {
-                const mesAno = data.toLocaleDateString('pt-BR', {
-                    month: '2-digit',
-                    year: 'numeric'
-                }).replace('/', '/');
-                
+                const mes = meses[data.getMonth()];
+                const ano = data.getFullYear();
                 const th = document.createElement('th');
-                th.textContent = mesAno;
+                th.textContent = `${mes}/${ano}`;
                 headerRow.appendChild(th);
-                
-                // Células de valores
+
                 for(let j = 1; j <= categorias.length; j++) {
                     const td = document.createElement('td');
                     const input = document.createElement('input');
@@ -330,18 +315,17 @@
                     td.appendChild(input);
                     tabela.rows[j].appendChild(td);
                 }
-                
-                // Células de Total e Acumulado
+
                 const tdTotal = document.createElement('td');
                 tdTotal.className = 'total';
                 tdTotal.id = `total-${i}`;
                 tabela.rows[tabela.rows.length - 2].appendChild(tdTotal);
-                
+
                 const tdAcumulado = document.createElement('td');
                 tdAcumulado.className = 'acumulado';
                 tdAcumulado.id = `acumulado-${i}`;
                 tabela.rows[tabela.rows.length - 1].appendChild(tdAcumulado);
-                
+
                 data.setMonth(data.getMonth() + 1);
             }
         }
@@ -350,12 +334,10 @@
             const acumulados = [];
             for(let m = 0; m < 24; m++) {
                 const acumuladoElement = document.getElementById(`acumulado-${m}`);
-                acumulados.push(parseFloat(acumuladoElement.textContent.replace(/[^0-9,-]/g, '').replace(',', '.')) || 0);
+                acumulados.push(parseFloat(acumuladoElement.textContent.replace(/[^\d,-]/g, '').replace(',', '.')) || 0);
             }
 
-            if(myChart) {
-                myChart.destroy();
-            }
+            if(myChart) myChart.destroy();
 
             const ctx = document.getElementById('graficoAcumulado').getContext('2d');
             myChart = new Chart(ctx, {
@@ -363,7 +345,7 @@
                 data: {
                     labels: Array.from({length: 24}, (_, i) => `Mês ${i+1}`),
                     datasets: [{
-                        label: 'Acumulado',
+                        label: 'Acumulado (R$)',
                         data: acumulados,
                         borderColor: '#3498db',
                         borderWidth: 2,
@@ -376,18 +358,14 @@
                     plugins: {
                         tooltip: {
                             callbacks: {
-                                label: function(context) {
-                                    return formatarMoeda(context.raw);
-                                }
+                                label: (context) => formatarMoeda(context.raw)
                             }
                         }
                     },
                     scales: {
                         y: {
                             ticks: {
-                                callback: function(value) {
-                                    return formatarMoeda(value);
-                                }
+                                callback: (value) => formatarMoeda(value)
                             }
                         }
                     }
@@ -396,9 +374,7 @@
         }
 
         function calcularTotais() {
-            const inputs = document.querySelectorAll('.valor');
-            
-            inputs.forEach(input => {
+            document.querySelectorAll('.valor').forEach(input => {
                 input.addEventListener('input', () => {
                     const indexMes = input.parentElement.cellIndex - 1;
                     const totalMes = document.getElementById(`total-${indexMes}`);
@@ -410,22 +386,18 @@
                         const tipo = categorias[idx]?.tipo || 'despesa';
                         const valor = parseFloat(input.value) || 0;
                         
-                        if(tipo === 'despesa') {
-                            totalDespesas += valor;
-                        } else {
-                            totalReceitas += valor;
-                        }
+                        if(tipo === 'despesa') totalDespesas += valor;
+                        else totalReceitas += valor;
                     });
                     
                     const saldo = totalReceitas - totalDespesas;
                     totalMes.textContent = formatarMoeda(saldo);
                     totalMes.classList.toggle('negative', saldo < 0);
-                    
-                    // Calcular acumulado
+
                     let acumuladoTotal = 0;
                     for(let m = 0; m < 24; m++) {
                         const totalElement = document.getElementById(`total-${m}`);
-                        const valorTotal = parseFloat(totalElement.textContent.replace(/[^0-9,-]/g, '').replace(',', '.')) || 0;
+                        const valorTotal = parseFloat(totalElement.textContent.replace(/[^\d,-]/g, '').replace(',', '.')) || 0;
                         acumuladoTotal += valorTotal;
                         const acumuladoElement = document.getElementById(`acumulado-${m}`);
                         acumuladoElement.textContent = formatarMoeda(acumuladoTotal);
@@ -437,7 +409,7 @@
             });
         }
 
-        window.onload = function() {
+        window.onload = () => {
             categorias = [
                 {nome: 'Aluguel', tipo: 'despesa'},
                 {nome: 'Salário', tipo: 'receita'},
