@@ -2,10 +2,8 @@
 <html lang="pt-br">
 <head>
     <meta charset="UTF-8">
-    <title>Planilha Financeira com Firebase</title>
+    <title>Planilha Financeira Completa</title>
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
-    <script src="https://www.gstatic.com/firebasejs/8.10.0/firebase-app.js"></script>
-    <script src="https://www.gstatic.com/firebasejs/8.10.0/firebase-database.js"></script>
     <style>
         :root {
             --cor-primaria: #2c3e50;
@@ -190,21 +188,6 @@
     </div>
 
     <script>
-        // Configuração do Firebase (substitua com suas credenciais)
-const firebaseConfig = {
-  apiKey: "AIzaSyCgSkYIvenfEzyjef50OD01Ox9et-nyBMo",
-  authDomain: "fluxo-6d716.firebaseapp.com",
-  databaseURL: "https://fluxo-6d716-default-rtdb.firebaseio.com",
-  projectId: "fluxo-6d716",
-  storageBucket: "fluxo-6d716.firebasestorage.app",
-  messagingSenderId: "761253335013",
-  appId: "1:761253335013:web:44c30372a4749203a3690c"
-};
-
-        // Inicializar Firebase
-        firebase.initializeApp(firebaseConfig);
-        const database = firebase.database();
-
         let mostrarControles = true;
         let categorias = [];
         let myChart = null;
@@ -213,85 +196,6 @@ const firebaseConfig = {
             'Julho', 'Agosto', 'Setembro', 'Outubro', 'Novembro', 'Dezembro'
         ];
 
-        // Funções do Firebase
-        async function salvarDados() {
-            try {
-                const dataToSave = {
-                    categorias: categorias,
-                    valores: obterValoresDaTabela(),
-                    totais: obterTotais(),
-                    acumulados: obterAcumulados()
-                };
-                
-                await database.ref('planilha').set(dataToSave);
-                console.log('Dados salvos com sucesso!');
-            } catch (error) {
-                console.error('Erro ao salvar dados:', error);
-            }
-        }
-
-        async function carregarDados() {
-            try {
-                const snapshot = await database.ref('planilha').once('value');
-                const data = snapshot.val();
-                
-                if (data) {
-                    categorias = data.categorias || [];
-                    atualizarTabela().then(() => {
-                        if (data.valores) preencherValoresDaTabela(data.valores);
-                        if (data.totais) preencherTotais(data.totais);
-                        if (data.acumulados) preencherAcumulados(data.acumulados);
-                    });
-                }
-            } catch (error) {
-                console.error('Erro ao carregar dados:', error);
-            }
-        }
-
-        // Funções auxiliares de dados
-        function obterValoresDaTabela() {
-            const valores = [];
-            document.querySelectorAll('tr').forEach((row, rowIndex) => {
-                if (rowIndex === 0 || rowIndex > categorias.length) return;
-                const rowData = [];
-                row.querySelectorAll('input').forEach(input => {
-                    rowData.push(input.value);
-                });
-                valores.push(rowData);
-            });
-            return valores;
-        }
-
-        function preencherValoresDaTabela(valores) {
-            document.querySelectorAll('tr').forEach((row, rowIndex) => {
-                if (rowIndex === 0 || rowIndex > categorias.length) return;
-                row.querySelectorAll('input').forEach((input, colIndex) => {
-                    input.value = valores[rowIndex - 1][colIndex] || '';
-                });
-            });
-        }
-
-        function obterTotais() {
-            return Array.from(document.querySelectorAll('.total')).map(td => td.textContent);
-        }
-
-        function preencherTotais(totais) {
-            document.querySelectorAll('.total').forEach((td, index) => {
-                td.textContent = totais[index] || 'R$ 0,00';
-            });
-        }
-
-        function obterAcumulados() {
-            return Array.from(document.querySelectorAll('.acumulado')).map(td => td.textContent);
-        }
-
-        function preencherAcumulados(acumulados) {
-            document.querySelectorAll('.acumulado').forEach((td, index) => {
-                td.textContent = acumulados[index] || 'R$ 0,00';
-            });
-        }
-
-        // Funções principais
         function toggleControls() {
             mostrarControles = !mostrarControles;
             document.querySelectorAll('.controles-categoria').forEach(div => {
@@ -314,11 +218,13 @@ const firebaseConfig = {
             const tipo = document.getElementById('tipoCategoria').value;
             
             if(nome) {
-                categorias.push({ nome, tipo });
+                categorias.push({
+                    nome: nome,
+                    tipo: tipo
+                });
                 atualizarTabela();
                 fecharModal();
                 document.getElementById('nomeCategoria').value = '';
-                salvarDados();
             }
         }
 
@@ -327,7 +233,6 @@ const firebaseConfig = {
             if(novoNome) {
                 categorias[index].nome = novoNome;
                 atualizarTabela();
-                salvarDados();
             }
         }
 
@@ -335,7 +240,6 @@ const firebaseConfig = {
             if((direcao === -1 && index > 0) || (direcao === 1 && index < categorias.length - 1)) {
                 [categorias[index], categorias[index + direcao]] = [categorias[index + direcao], categorias[index]];
                 atualizarTabela();
-                salvarDados();
             }
         }
 
@@ -343,18 +247,23 @@ const firebaseConfig = {
             if(confirm('Tem certeza que deseja excluir esta categoria?')) {
                 categorias.splice(index, 1);
                 atualizarTabela();
-                salvarDados();
             }
         }
 
         function formatarMoeda(valor) {
-            const numero = parseFloat(valor) || 0;
-            return 'R$ ' + numero.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+            const numero = typeof valor === 'string' ? 
+                parseFloat(valor.replace('R$ ', '').replace(/\./g, '').replace(',', '.')) : valor;
+            return 'R$ ' + numero.toLocaleString('pt-BR', {
+                minimumFractionDigits: 2,
+                maximumFractionDigits: 2
+            });
         }
 
-        async function atualizarTabela() {
+        function atualizarTabela() {
             const tabela = document.getElementById('planilha');
-            while(tabela.rows.length > 1) tabela.deleteRow(1);
+            while(tabela.rows.length > 1) {
+                tabela.deleteRow(1);
+            }
             
             categorias.forEach((categoria, index) => {
                 const row = tabela.insertRow();
@@ -384,7 +293,9 @@ const firebaseConfig = {
             const tabela = document.getElementById('planilha');
             const headerRow = tabela.rows[0];
             
-            while(headerRow.cells.length > 1) headerRow.deleteCell(1);
+            while(headerRow.cells.length > 1) {
+                headerRow.deleteCell(1);
+            }
             
             const data = new Date();
             for(let i = 0; i < 24; i++) {
@@ -401,7 +312,6 @@ const firebaseConfig = {
                     input.step = '0.01';
                     input.className = 'valor';
                     input.addEventListener('focus', (e) => e.target.select());
-                    input.addEventListener('input', salvarDados);
                     td.appendChild(input);
                     tabela.rows[j].appendChild(td);
                 }
@@ -421,8 +331,11 @@ const firebaseConfig = {
         }
 
         function atualizarGrafico() {
-            const acumulados = Array.from(document.querySelectorAll('.acumulado'))
-                .map(td => parseFloat(td.textContent.replace(/[^\d,]/g, '').replace(',', '.')) || 0;
+            const acumulados = [];
+            for(let m = 0; m < 24; m++) {
+                const acumuladoElement = document.getElementById(`acumulado-${m}`);
+                acumulados.push(parseFloat(acumuladoElement.textContent.replace(/[^\d,-]/g, '').replace(',', '.')) || 0);
+            }
 
             if(myChart) myChart.destroy();
 
@@ -473,7 +386,8 @@ const firebaseConfig = {
                         const tipo = categorias[idx]?.tipo || 'despesa';
                         const valor = parseFloat(input.value) || 0;
                         
-                        tipo === 'despesa' ? totalDespesas += valor : totalReceitas += valor;
+                        if(tipo === 'despesa') totalDespesas += valor;
+                        else totalReceitas += valor;
                     });
                     
                     const saldo = totalReceitas - totalDespesas;
@@ -483,7 +397,7 @@ const firebaseConfig = {
                     let acumuladoTotal = 0;
                     for(let m = 0; m < 24; m++) {
                         const totalElement = document.getElementById(`total-${m}`);
-                        const valorTotal = parseFloat(totalElement.textContent.replace(/[^\d,]/g, '').replace(',', '.')) || 0;
+                        const valorTotal = parseFloat(totalElement.textContent.replace(/[^\d,-]/g, '').replace(',', '.')) || 0;
                         acumuladoTotal += valorTotal;
                         const acumuladoElement = document.getElementById(`acumulado-${m}`);
                         acumuladoElement.textContent = formatarMoeda(acumuladoTotal);
@@ -491,22 +405,17 @@ const firebaseConfig = {
                     }
                     
                     atualizarGrafico();
-                    salvarDados();
                 });
             });
         }
 
-        // Inicialização
         window.onload = () => {
-            carregarDados();
-            if(categorias.length === 0) {
-                categorias = [
-                    {nome: 'Aluguel', tipo: 'despesa'},
-                    {nome: 'Salário', tipo: 'receita'},
-                    {nome: 'Transporte', tipo: 'despesa'}
-                ];
-                atualizarTabela();
-            }
+            categorias = [
+                {nome: 'Aluguel', tipo: 'despesa'},
+                {nome: 'Salário', tipo: 'receita'},
+                {nome: 'Transporte', tipo: 'despesa'}
+            ];
+            atualizarTabela();
         };
     </script>
 </body>
