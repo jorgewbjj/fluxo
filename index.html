@@ -90,13 +90,19 @@
       const instance = jsPlumb.getInstance();
       instance.setContainer('canvas');
 
+      // allow clicking a connection to delete it
+      instance.bind('click', (conn, evt) => {
+        if (confirm('Delete this connection?')) {
+          instance.deleteConnection(conn);
+        }
+      });
+
       let boxCounter = 0;
 
-      // auto-grow a textarea to fit its content
+      // auto-resize textarea
       function adjustHeight(ta) {
         ta.style.height = 'auto';
         ta.style.height = ta.scrollHeight + 'px';
-        // repaint connections for this box
         instance.repaint(ta.parentElement);
       }
 
@@ -128,7 +134,7 @@
         box.appendChild(main);
         adjustHeight(main);
 
-        // four connection handles
+        // connection handles on all four sides
         ['top','right','bottom','left'].forEach(pos => {
           const h = document.createElement('div');
           h.className = 'handle handle-' + pos;
@@ -149,7 +155,7 @@
 
         document.getElementById('canvas').appendChild(box);
 
-        // make box draggable (except handles & delete btn)
+        // draggable, excluding handles & delete button
         instance.draggable(box, {
           containment: 'parent',
           filter: '.handle, .delete-btn',
@@ -176,7 +182,7 @@
         });
       });
 
-      // start with one box
+      // start with one
       createBox();
     });
   </script>
