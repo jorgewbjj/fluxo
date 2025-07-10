@@ -1,115 +1,219 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8"/>
-  <meta name="viewport" content="width=device-width,initial-scale=1"/>
-  <title>Flowchart Builder</title>
+  <meta charset="UTF-8">
+  <title>Estimate Generator</title>
   <style>
-    body, html {
-      margin: 0; padding: 0; height: 100%; overflow: hidden;
+    body {
       font-family: Arial, sans-serif;
+      max-width: 800px;
+      margin: 2rem auto;
+      padding: 0 1rem;
+      color: #333;
     }
-    #toolbar {
-      height: 50px; background: #333; color: #fff;
-      display: flex; align-items: center; padding: 0 10px;
+    h1 {
+      text-align: center;
+      margin-bottom: 1rem;
     }
-    #toolbar button {
-      margin-right: 10px; padding: 8px 12px;
-      border: none; background: #555; color: #fff; cursor: pointer;
+    form {
+      display: grid;
+      gap: 1rem;
     }
-    #toolbar button:hover { background: #666; }
-    #canvas {
-      position: relative; width: 100%; height: calc(100% - 50px);
-      background: #f0f0f0; overflow: auto;
+    .row {
+      display: flex;
+      gap: 1rem;
+      flex-wrap: wrap;
     }
-    .box {
-      position: absolute; width: 150px; min-height: 60px;
-      border: 2px solid #444; border-radius: 4px;
-      background: #fff; padding: 5px; box-sizing: border-box;
-      cursor: move;
+    .row > * {
+      flex: 1;
+      min-width: 150px;
     }
-    .box:focus {
-      outline: none; border-color: #007bff;
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      margin-bottom: 1rem;
+    }
+    table th, table td {
+      border: 1px solid #ccc;
+      padding: 0.5rem;
+      text-align: center;
+    }
+    button {
+      padding: 0.5rem 1rem;
+      cursor: pointer;
+      background: #007bff;
+      color: white;
+      border: none;
+      border-radius: 0.25rem;
+    }
+    button:hover {
+      background: #0056b3;
+    }
+    .totals {
+      text-align: right;
+      font-weight: bold;
+      margin-top: 1rem;
     }
   </style>
 </head>
 <body>
 
-  <div id="toolbar">
-    <button id="add-box">Add Box</button>
-    <button id="export-pdf">Export PDF</button>
-  </div>
-  <div id="canvas"></div>
+  <h1>Estimate Calculator</h1>
+  <form id="estimate-form" onsubmit="return false;">
+    <div class="row">
+      <label>
+        Store:<br>
+        <input type="text" id="store" required>
+      </label>
+      <label>
+        Date:<br>
+        <input type="date" id="date" required>
+      </label>
+      <label>
+        Customer:<br>
+        <input type="text" id="customer" required>
+      </label>
+    </div>
 
-  <!-- jsPlumb CE -->
-  <script src="https://cdn.jsdelivr.net/npm/jsplumb@2.15.6/dist/js/jsplumb.min.js"></script>
-  <!-- html2canvas -->
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
-  <!-- jsPDF -->
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+    <h2>Materials</h2>
+    <table id="materials-table">
+      <thead>
+        <tr>
+          <th>Material</th>
+          <th>Unit Price</th>
+          <th>Quantity</th>
+          <th>Line Total</th>
+          <th>Action</th>
+        </tr>
+      </thead>
+      <tbody>
+        <!-- rows will be added here -->
+      </tbody>
+    </table>
+    <button type="button" onclick="addMaterialRow()">+ Add Material</button>
+
+    <div class="row">
+      <label>
+        Labor ($):<br>
+        <input type="number" id="labor" value="0" min="0" step="0.01" onchange="updateTotals()" required>
+      </label>
+      <label>
+        Insurance (%):<br>
+        <input type="number" id="insurance" value="0" min="0" step="0.1" onchange="updateTotals()" required>
+      </label>
+    </div>
+
+    <div class="totals">
+      Materials Total: $<span id="materials-total">0.00</span><br>
+      Labor: $<span id="labor-total">0.00</span><br>
+      Insurance: $<span id="insurance-total">0.00</span><br>
+      <hr>
+      <strong>Grand Total: $<span id="grand-total">0.00</span></strong>
+    </div>
+  </form>
 
   <script>
-    // Wait until the browser has parsed everything
-    document.addEventListener('DOMContentLoaded', () => {
-      // 1) get your jsPlumb instance
-      const instance = jsPlumb.getInstance();
-      // 2) tell it which div is your drawing surface
-      instance.setContainer('canvas');
+    // ---- Customize your materials here ----
+    const materialsList = [
+      { name: 'Concrete (bag)', price: 5.00 },
+      { name: 'Lumber (ft)',      price: 2.50 },
+      { name: 'Nails (box)',      price: 8.75 },
+      { name: 'Paint (gallon)',   price: 25.00 }
+    ];
+    // ---------------------------------------
 
-      let boxCounter = 0;
+    // Auto-set today's date
+    document.getElementById('date').value = new Date().toISOString().substr(0,10);
 
-      // our box‐creator
-      function createBox(x = 50, y = 50) {
-        boxCounter++;
-        const id = 'box' + boxCounter;
-        const box = document.createElement('div');
-        box.id = id;
-        box.className = 'box';
-        box.style.left = x + 'px';
-        box.style.top  = y + 'px';
-        box.contentEditable = true;
-        box.innerText = 'Edit me…';
-        document.getElementById('canvas').appendChild(box);
+    function addMaterialRow() {
+      const tbody = document.querySelector('#materials-table tbody');
+      const tr = document.createElement('tr');
 
-        // make it draggable
-        instance.draggable(box, { containment: 'parent' });
-        // allow it to be a source _and_ target
-        instance.makeSource(box, {
-          anchor: 'Continuous',
-          connector: ['Flowchart', { cornerRadius: 5 }],
-          connectorStyle: { stroke: '#444', strokeWidth: 2 }
-        });
-        instance.makeTarget(box, {
-          anchor: 'Continuous',
-          dropOptions: { hoverClass: 'dragHover' }
-        });
+      // Material dropdown
+      const tdMat = document.createElement('td');
+      const select = document.createElement('select');
+      select.innerHTML = `<option value="" disabled selected>Select...</option>` +
+        materialsList.map((m,i) =>
+          `<option value="${i}">${m.name}</option>`
+        ).join('');
+      select.onchange = () => {
+        const idx = select.value;
+        priceInput.value = materialsList[idx].price.toFixed(2);
+        qtyInput.value = 1;
+        updateLineTotal();
+        updateTotals();
+      };
+      tdMat.appendChild(select);
+
+      // Price
+      const tdPrice = document.createElement('td');
+      const priceInput = document.createElement('input');
+      priceInput.type = 'number';
+      priceInput.readOnly = true;
+      priceInput.value = '0.00';
+      tdPrice.appendChild(priceInput);
+
+      // Quantity
+      const tdQty = document.createElement('td');
+      const qtyInput = document.createElement('input');
+      qtyInput.type = 'number';
+      qtyInput.min = '0';
+      qtyInput.step = '1';
+      qtyInput.value = '0';
+      qtyInput.onchange = () => {
+        updateLineTotal();
+        updateTotals();
+      };
+      tdQty.appendChild(qtyInput);
+
+      // Line total
+      const tdTotal = document.createElement('td');
+      const totalSpan = document.createElement('span');
+      totalSpan.textContent = '0.00';
+      tdTotal.appendChild(totalSpan);
+
+      // Remove button
+      const tdAction = document.createElement('td');
+      const removeBtn = document.createElement('button');
+      removeBtn.type = 'button';
+      removeBtn.textContent = 'Remove';
+      removeBtn.onclick = () => {
+        tr.remove();
+        updateTotals();
+      };
+      tdAction.appendChild(removeBtn);
+
+      tr.append(tdMat, tdPrice, tdQty, tdTotal, tdAction);
+      tbody.appendChild(tr);
+
+      function updateLineTotal() {
+        const lineTotal = parseFloat(priceInput.value) * parseInt(qtyInput.value || 0, 10);
+        totalSpan.textContent = lineTotal.toFixed(2);
       }
+    }
 
-      // hook up Add Box
-      document.getElementById('add-box').addEventListener('click', () => {
-        console.log('Add Box clicked');
-        // stagger them so you can see each new one
-        createBox(20 + boxCounter * 15, 20 + boxCounter * 15);
+    function updateTotals() {
+      // Materials total
+      let matTotal = 0;
+      document.querySelectorAll('#materials-table tbody tr').forEach(tr => {
+        const line = parseFloat(tr.querySelector('td:nth-child(4) span').textContent) || 0;
+        matTotal += line;
       });
+      document.getElementById('materials-total').textContent = matTotal.toFixed(2);
 
-      // hook up Export PDF
-      document.getElementById('export-pdf').addEventListener('click', () => {
-        console.log('Export PDF clicked');
-        html2canvas(document.getElementById('canvas'), { scale: 2 }).then(canvas => {
-          const img = canvas.toDataURL('image/png');
-          const { jsPDF } = window.jspdf;
-          const pdf = new jsPDF({ unit: 'px', format: 'a4' });
-          const m = 20;
-          const w = pdf.internal.pageSize.getWidth() - m*2;
-          const h = canvas.height * (w / canvas.width);
-          pdf.addImage(img, 'PNG', m, m, w, h);
-          pdf.save('flowchart.pdf');
-        });
-      });
+      // Labor
+      const labor = parseFloat(document.getElementById('labor').value) || 0;
+      document.getElementById('labor-total').textContent = labor.toFixed(2);
 
-      // draw the first box so you know it’s working
-      createBox();
-    });
+      // Insurance
+      const insPct = parseFloat(document.getElementById('insurance').value) || 0;
+      const insAmt = ((matTotal + labor) * insPct / 100);
+      document.getElementById('insurance-total').textContent = insAmt.toFixed(2);
+
+      // Grand total
+      const grand = matTotal + labor + insAmt;
+      document.getElementById('grand-total').textContent = grand.toFixed(2);
+    }
   </script>
 </body>
 </html>
