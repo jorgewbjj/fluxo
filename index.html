@@ -18,39 +18,40 @@
       border: none; background: #555; color: #fff; cursor: pointer;
     }
     #toolbar button:hover { background: #666; }
+
     #canvas {
       position: relative; width: 100%; height: calc(100% - 50px);
       background: #f0f0f0; overflow: auto;
     }
+
     .box {
       position: absolute; width: 180px; min-height: 80px;
       border: 2px solid #444; border-radius: 4px;
       background: #fff; box-sizing: border-box;
       cursor: move; padding: 5px;
     }
-    .box:focus-within {
-      border-color: #007bff;
+    .box:focus-within { border-color: #007bff; }
+
+    .box .delete-btn {
+      position: absolute; top: 2px; right: 2px;
+      width: 16px; height: 16px;
+      background: #e74c3c; color: #fff;
+      border: none; border-radius: 50%;
+      text-align: center; line-height: 14px;
+      font-size: 12px; cursor: pointer; z-index: 10;
     }
+
     .box .main {
-      font-weight: bold;
-      outline: none;
-      cursor: text;
+      font-weight: bold; outline: none; cursor: text;
     }
     .box .detail {
-      display: none;
-      position: absolute;
-      top: 0; left: 0;
-      width: 100%; height: 100%;
+      display: none; position: absolute;
+      top: 0; left: 0; width: 100%; height: 100%;
       background: rgba(255,255,255,0.95);
-      border-radius: 4px;
-      padding: 8px;
-      box-sizing: border-box;
-      cursor: text;
-      outline: none;
+      border-radius: 4px; padding: 8px;
+      box-sizing: border-box; cursor: text; outline: none;
     }
-    .box:hover .detail {
-      display: block;
-    }
+    .box:hover .detail { display: block; }
   </style>
 </head>
 <body>
@@ -61,7 +62,7 @@
   </div>
   <div id="canvas"></div>
 
-  <!-- jsPlumb CE -->
+  <!-- jsPlumb -->
   <script src="https://cdn.jsdelivr.net/npm/jsplumb@2.15.6/dist/js/jsplumb.min.js"></script>
   <!-- html2canvas -->
   <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
@@ -84,14 +85,24 @@
         box.style.left = x + 'px';
         box.style.top  = y + 'px';
 
-        // Main label
+        // delete button
+        const deleteBtn = document.createElement('button');
+        deleteBtn.className = 'delete-btn';
+        deleteBtn.innerHTML = '&times;';
+        deleteBtn.addEventListener('click', e => {
+          e.stopPropagation();
+          instance.remove(box);
+        });
+        box.appendChild(deleteBtn);
+
+        // main (always visible)
         const main = document.createElement('div');
         main.className = 'main';
         main.contentEditable = true;
         main.innerText = 'Title…';
         box.appendChild(main);
 
-        // Detail overlay
+        // detail (on hover)
         const detail = document.createElement('div');
         detail.className = 'detail';
         detail.contentEditable = true;
@@ -100,10 +111,14 @@
 
         document.getElementById('canvas').appendChild(box);
 
-        // Make draggable
-        instance.draggable(box, { containment: 'parent' });
+        // draggable—but NOT when clicking text or the delete button
+        instance.draggable(box, {
+          containment: 'parent',
+          filter: '.main, .detail, .delete-btn',
+          filterExclude: true
+        });
 
-        // Connections
+        // make endpoints
         instance.makeSource(box, {
           anchor: 'Continuous',
           connector: ['Flowchart', { cornerRadius: 5 }],
@@ -115,26 +130,26 @@
         });
       }
 
-      // Add Box button
+      // Add Box
       document.getElementById('add-box').addEventListener('click', () => {
         createBox(30 + boxCounter * 20, 30 + boxCounter * 20);
       });
 
-      // Export PDF button
+      // Export PDF
       document.getElementById('export-pdf').addEventListener('click', () => {
         html2canvas(document.getElementById('canvas'), { scale: 2 }).then(canvas => {
           const img = canvas.toDataURL('image/png');
           const { jsPDF } = window.jspdf;
           const pdf = new jsPDF({ unit: 'px', format: 'a4' });
-          const margin = 20;
-          const w = pdf.internal.pageSize.getWidth() - margin*2;
+          const m = 20;
+          const w = pdf.internal.pageSize.getWidth() - m * 2;
           const h = canvas.height * (w / canvas.width);
-          pdf.addImage(img, 'PNG', margin, margin, w, h);
+          pdf.addImage(img, 'PNG', m, m, w, h);
           pdf.save('flowchart.pdf');
         });
       });
 
-      // Start with one box
+      // one starter box
       createBox();
     });
   </script>
