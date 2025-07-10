@@ -25,31 +25,44 @@
     }
 
     .box {
-      position: absolute; width: 180px; min-height: 80px;
+      position: absolute; width: 200px; min-height: 100px;
       border: 2px solid #444; border-radius: 4px;
       background: #fff; box-sizing: border-box;
-      cursor: move; padding: 5px;
+      padding: 5px; cursor: move;
     }
     .box:focus-within { border-color: #007bff; }
 
-    .box .delete-btn {
-      position: absolute; top: 2px; right: 2px;
-      width: 16px; height: 16px;
-      background: #e74c3c; color: #fff;
-      border: none; border-radius: 50%;
-      text-align: center; line-height: 14px;
-      font-size: 12px; cursor: pointer; z-index: 10;
+    /* delete button */
+    .delete-btn {
+      position: absolute; top: 4px; right: 4px;
+      width: 18px; height: 18px; line-height: 16px;
+      background: #e74c3c; color: #fff; border: none;
+      border-radius: 50%; text-align: center; font-size: 12px;
+      cursor: pointer; z-index: 2;
     }
 
-    .box .main {
-      font-weight: bold; outline: none; cursor: text;
+    /* connection handle */
+    .handle {
+      position: absolute; bottom: 4px; right: 4px;
+      width: 14px; height: 14px; background: #444;
+      border-radius: 50%; cursor: crosshair; z-index: 1;
     }
-    .box .detail {
-      display: none; position: absolute;
-      top: 0; left: 0; width: 100%; height: 100%;
-      background: rgba(255,255,255,0.95);
-      border-radius: 4px; padding: 8px;
-      box-sizing: border-box; cursor: text; outline: none;
+
+    /* title input */
+    .main {
+      width: 100%; border: none; outline: none;
+      font-weight: bold; font-size: 14px;
+      margin-bottom: 5px;
+    }
+
+    /* detail textarea (hidden until hover) */
+    .detail {
+      position: absolute; top: 0; left: 0;
+      width: 100%; height: 100%;
+      border: none; outline: none;
+      padding: 5px; box-sizing: border-box;
+      resize: none; background: rgba(255,255,255,0.95);
+      display: none; font-size: 12px;
     }
     .box:hover .detail { display: block; }
   </style>
@@ -88,43 +101,49 @@
         // delete button
         const deleteBtn = document.createElement('button');
         deleteBtn.className = 'delete-btn';
-        deleteBtn.innerHTML = '&times;';
+        deleteBtn.innerText = '×';
         deleteBtn.addEventListener('click', e => {
           e.stopPropagation();
           instance.remove(box);
         });
         box.appendChild(deleteBtn);
 
-        // main (always visible)
-        const main = document.createElement('div');
+        // title input
+        const main = document.createElement('input');
         main.className = 'main';
-        main.contentEditable = true;
-        main.innerText = 'Title…';
+        main.type = 'text';
+        main.value = 'Title';
         box.appendChild(main);
 
-        // detail (on hover)
-        const detail = document.createElement('div');
+        // detail textarea
+        const detail = document.createElement('textarea');
         detail.className = 'detail';
-        detail.contentEditable = true;
-        detail.innerText = 'Details…';
+        detail.value = 'More details...';
         box.appendChild(detail);
+
+        // connection handle
+        const handle = document.createElement('div');
+        handle.className = 'handle';
+        box.appendChild(handle);
 
         document.getElementById('canvas').appendChild(box);
 
-        // draggable—but NOT when clicking text or the delete button
+        // draggable, excluding form controls & delete button
         instance.draggable(box, {
           containment: 'parent',
-          filter: '.main, .detail, .delete-btn',
+          filter: '.main, .detail, .delete-btn, .handle',
           filterExclude: true
         });
 
-        // make endpoints
-        instance.makeSource(box, {
+        // make handle both source & target
+        instance.makeSource(handle, {
+          parent: box,
           anchor: 'Continuous',
           connector: ['Flowchart', { cornerRadius: 5 }],
           connectorStyle: { stroke: '#444', strokeWidth: 2 }
         });
-        instance.makeTarget(box, {
+        instance.makeTarget(handle, {
+          parent: box,
           anchor: 'Continuous',
           dropOptions: { hoverClass: 'dragHover' }
         });
@@ -141,15 +160,15 @@
           const img = canvas.toDataURL('image/png');
           const { jsPDF } = window.jspdf;
           const pdf = new jsPDF({ unit: 'px', format: 'a4' });
-          const m = 20;
-          const w = pdf.internal.pageSize.getWidth() - m * 2;
+          const margin = 20;
+          const w = pdf.internal.pageSize.getWidth() - margin*2;
           const h = canvas.height * (w / canvas.width);
-          pdf.addImage(img, 'PNG', m, m, w, h);
+          pdf.addImage(img, 'PNG', margin, margin, w, h);
           pdf.save('flowchart.pdf');
         });
       });
 
-      // one starter box
+      // start with one box
       createBox();
     });
   </script>
