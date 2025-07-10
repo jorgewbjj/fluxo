@@ -25,19 +25,27 @@
     }
 
     .box {
-      position: absolute; width: 200px; min-height: 80px;
-      border: 2px solid #444; border-radius: 4px;
-      background: #fff; box-sizing: border-box;
-      padding: 8px; cursor: move;
+      position: absolute;
+      width: 200px;
+      min-height: 80px;
+      border: 2px solid #444;
+      border-radius: 4px;
+      background: #fff;
+      box-sizing: border-box;
+      padding: 8px;
+      cursor: move;
     }
     .box:focus-within { border-color: #007bff; }
 
     /* editable content */
     .box .main {
-      width: 100%; height: 100%;
-      outline: none; border: none;
-      font-size: 14px; line-height: 1.2;
-      resize: none; /* if using textarea */
+      width: 100%;
+      outline: none;
+      border: none;
+      font-size: 14px;
+      line-height: 1.2;
+      resize: none;
+      overflow: hidden;
     }
 
     /* delete button */
@@ -56,11 +64,10 @@
       background: #444; border-radius: 50%;
       cursor: crosshair; z-index: 1;
     }
-    .box .handle-top    { top: -6px;   left: calc(50% - 6px); }
+    .box .handle-top    { top: -6px;    left: calc(50% - 6px); }
+    .box .handle-right  { right: -6px;  top:  calc(50% - 6px); }
     .box .handle-bottom { bottom: -6px; left: calc(50% - 6px); }
-    .box .handle-left   { left: -6px;   top: calc(50% - 6px); }
-    .box .handle-right  { right: -6px;  top: calc(50% - 6px); }
-
+    .box .handle-left   { left: -6px;   top:  calc(50% - 6px); }
   </style>
 </head>
 <body>
@@ -85,6 +92,14 @@
 
       let boxCounter = 0;
 
+      // auto-grow a textarea to fit its content
+      function adjustHeight(ta) {
+        ta.style.height = 'auto';
+        ta.style.height = ta.scrollHeight + 'px';
+        // repaint connections for this box
+        instance.repaint(ta.parentElement);
+      }
+
       function createBox(x = 60, y = 60) {
         boxCounter++;
         const id = 'box' + boxCounter;
@@ -104,35 +119,37 @@
         });
         box.appendChild(del);
 
-        // editable main region
+        // editable main textarea
         const main = document.createElement('textarea');
         main.className = 'main';
         main.value = 'Edit text...';
+        main.addEventListener('input',  () => adjustHeight(main));
+        main.addEventListener('mouseenter', () => adjustHeight(main));
         box.appendChild(main);
+        adjustHeight(main);
 
         // four connection handles
         ['top','right','bottom','left'].forEach(pos => {
           const h = document.createElement('div');
           h.className = 'handle handle-' + pos;
           box.appendChild(h);
-          // source
+          const anchorName = pos.charAt(0).toUpperCase() + pos.slice(1);
           instance.makeSource(h, {
             parent: box,
-            anchor: pos.toUpperCase(),
+            anchor: anchorName,
             connector: ['Flowchart', { cornerRadius: 5 }],
             connectorStyle: { stroke: '#444', strokeWidth: 2 }
           });
-          // target
           instance.makeTarget(h, {
             parent: box,
-            anchor: pos.toUpperCase(),
+            anchor: anchorName,
             dropOptions: { hoverClass: 'dragHover' }
           });
         });
 
         document.getElementById('canvas').appendChild(box);
 
-        // draggable, excluding handles & delete button
+        // make box draggable (except handles & delete btn)
         instance.draggable(box, {
           containment: 'parent',
           filter: '.handle, .delete-btn',
@@ -159,7 +176,7 @@
         });
       });
 
-      // start with one
+      // start with one box
       createBox();
     });
   </script>
