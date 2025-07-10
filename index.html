@@ -1,422 +1,138 @@
 <!DOCTYPE html>
-<html lang="pt-br">
+<html lang="en">
 <head>
-    <meta charset="UTF-8">
-    <title>Planilha Financeira Completa</title>
-    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
-    <style>
-        :root {
-            --cor-primaria: #2c3e50;
-            --cor-secundaria: #3498db;
-            --cor-fundo: #f8f9fa;
-            --cor-texto: #34495e;
-            --borda: #ecf0f1;
-        }
-
-        body {
-            font-family: 'Segoe UI', sans-serif;
-            margin: 0;
-            padding: 20px;
-            background-color: var(--cor-fundo);
-            color: var(--cor-texto);
-        }
-
-        .container {
-            max-width: 100%;
-            overflow-x: auto;
-        }
-
-        table {
-            border-collapse: collapse;
-            margin: 20px 0;
-            min-width: 800px;
-            background: white;
-            border-radius: 8px;
-            overflow: hidden;
-            box-shadow: 0 1px 3px rgba(0,0,0,0.1);
-        }
-
-        th, td {
-            border: 1px solid var(--borda);
-            padding: 12px;
-            text-align: center;
-            min-width: 120px;
-        }
-
-        th {
-            background-color: var(--cor-primaria);
-            color: white;
-            font-weight: 500;
-            position: sticky;
-            left: 0;
-            z-index: 2;
-        }
-
-        .categoria {
-            text-align: left;
-            background-color: #f8f9fa;
-            transition: background-color 0.2s;
-            position: sticky;
-            left: 0;
-            z-index: 1;
-        }
-
-        .categoria:hover {
-            background-color: #f1f3f5;
-        }
-
-        .total, .acumulado {
-            position: sticky;
-            left: 0;
-            z-index: 1;
-        }
-
-        .total {
-            background-color: #ffe6e6;
-            font-weight: 600;
-        }
-
-        .acumulado {
-            background-color: #e8f5e9;
-            font-weight: 600;
-            color: #2e7d32;
-        }
-
-        .negative {
-            color: #c0392b;
-        }
-
-        input {
-            width: 100px;
-            padding: 6px;
-            border: 1px solid var(--borda);
-            border-radius: 4px;
-            text-align: right;
-            transition: border-color 0.2s;
-        }
-
-        input:focus {
-            outline: none;
-            border-color: var(--cor-secundaria);
-            box-shadow: 0 0 0 2px rgba(52,152,219,0.1);
-        }
-
-        .grafico-container {
-            margin-top: 40px;
-            max-width: 1000px;
-            padding: 20px;
-            background: white;
-            border-radius: 8px;
-            box-shadow: 0 1px 3px rgba(0,0,0,0.1);
-        }
-
-        .modal {
-            display: none;
-            position: fixed;
-            top: 50%;
-            left: 50%;
-            transform: translate(-50%, -50%);
-            padding: 25px;
-            background: white;
-            border-radius: 8px;
-            box-shadow: 0 5px 15px rgba(0,0,0,0.2);
-            z-index: 1000;
-        }
-
-        .controles-categoria {
-            display: inline-flex;
-            gap: 8px;
-        }
-
-        .controles-categoria.hidden {
-            display: none;
-        }
-
-        .nome-categoria {
-            display: inline-block;
-            min-width: 120px;
-            padding-right: 10px;
-        }
-
-        button {
-            padding: 8px 16px;
-            border: none;
-            border-radius: 4px;
-            background-color: var(--cor-secundaria);
-            color: white;
-            cursor: pointer;
-            transition: background-color 0.2s;
-        }
-
-        button:hover {
-            background-color: #2980b9;
-        }
-
-        .toggle-controls {
-            position: sticky;
-            left: 20px;
-            margin-bottom: 10px;
-            background-color: var(--cor-secundaria);
-        }
-    </style>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width,initial-scale=1"/>
+  <title>Flowchart Builder</title>
+  <style>
+    body, html {
+      margin: 0;
+      padding: 0;
+      height: 100%;
+      overflow: hidden;
+      font-family: Arial, sans-serif;
+    }
+    #toolbar {
+      height: 50px;
+      background: #333;
+      color: #fff;
+      display: flex;
+      align-items: center;
+      padding: 0 10px;
+    }
+    #toolbar button {
+      margin-right: 10px;
+      padding: 8px 12px;
+      border: none;
+      background: #555;
+      color: #fff;
+      cursor: pointer;
+    }
+    #toolbar button:hover {
+      background: #666;
+    }
+    #canvas {
+      position: relative;
+      width: 100%;
+      height: calc(100% - 50px);
+      background: #f0f0f0;
+      overflow: auto;
+    }
+    .box {
+      position: absolute;
+      width: 150px;
+      min-height: 60px;
+      border: 2px solid #444;
+      border-radius: 4px;
+      background: #fff;
+      padding: 5px;
+      box-sizing: border-box;
+      cursor: move;
+    }
+    .box:focus {
+      outline: none;
+      border-color: #007bff;
+    }
+  </style>
 </head>
 <body>
-    <button class="toggle-controls" onclick="toggleControls()">Ocultar Controles</button>
-    <button onclick="mostrarModal()">Nova Categoria</button>
-    
-    <div class="container">
-        <table id="planilha">
-            <tr>
-                <th class="categoria">Categoria</th>
-            </tr>
-        </table>
-    </div>
 
-    <div class="grafico-container">
-        <canvas id="graficoAcumulado"></canvas>
-    </div>
+  <div id="toolbar">
+    <button id="add-box">Add Box</button>
+    <button id="export-pdf">Export PDF</button>
+  </div>
+  <div id="canvas"></div>
 
-    <div id="modalCategoria" class="modal">
-        <h3>➕ Nova Categoria</h3>
-        <input type="text" id="nomeCategoria" placeholder="Nome da categoria">
-        <select id="tipoCategoria">
-            <option value="despesa">Despesa</option>
-            <option value="receita">Receita</option>
-        </select>
-        <button onclick="adicionarCategoria()">Salvar</button>
-        <button onclick="fecharModal()">Cancelar</button>
-    </div>
+  <!-- jsPlumb -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jsplumb/2.15.6/jsplumb.min.js"></script>
+  <!-- html2canvas -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+  <!-- jsPDF -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
 
-    <script>
-        let mostrarControles = true;
-        let categorias = [];
-        let myChart = null;
-        const meses = [
-            'Janeiro', 'Fevereiro', 'Março', 'Abril', 'Maio', 'Junho',
-            'Julho', 'Agosto', 'Setembro', 'Outubro', 'Novembro', 'Dezembro'
-        ];
+  <script>
+    document.addEventListener("DOMContentLoaded", () => {
+      // Wait for jsPlumb to fully initialize
+      jsPlumb.ready(() => {
+        // Create a jsPlumb instance scoped to our canvas
+        const instance = jsPlumb.getInstance({
+          Container: "canvas"
+        });
 
-        function toggleControls() {
-            mostrarControles = !mostrarControles;
-            document.querySelectorAll('.controles-categoria').forEach(div => {
-                div.classList.toggle('hidden', !mostrarControles);
-            });
-            document.querySelector('.toggle-controls').textContent = 
-                mostrarControles ? 'Ocultar Controles' : 'Mostrar Controles';
+        let boxCounter = 0;
+
+        function createBox(x = 50, y = 50) {
+          boxCounter++;
+          const id = "box" + boxCounter;
+          const box = document.createElement("div");
+          box.classList.add("box");
+          box.id = id;
+          box.style.left = x + "px";
+          box.style.top = y + "px";
+          box.contentEditable = true;
+          box.innerText = "Edit text...";
+          document.getElementById("canvas").appendChild(box);
+
+          // Make it draggable within the canvas
+          instance.draggable(box, { containment: "parent" });
+
+          // Allow connections from and to this box
+          instance.makeSource(box, {
+            anchor: "Continuous",
+            connector: ["Flowchart", { cornerRadius: 5 }],
+            connectorStyle: { stroke: "#444", strokeWidth: 2 }
+          });
+          instance.makeTarget(box, {
+            anchor: "Continuous",
+            dropOptions: { hoverClass: "dragHover" }
+          });
         }
 
-        function mostrarModal() {
-            document.getElementById('modalCategoria').style.display = 'block';
-        }
+        // Wire up the Add Box button
+        document.getElementById("add-box").addEventListener("click", () => {
+          // offset each new box slightly so you can see it
+          createBox(20 + boxCounter * 15, 20 + boxCounter * 15);
+        });
 
-        function fecharModal() {
-            document.getElementById('modalCategoria').style.display = 'none';
-        }
+        // Wire up Export PDF
+        document.getElementById("export-pdf").addEventListener("click", () => {
+          const canvasEl = document.getElementById("canvas");
+          html2canvas(canvasEl, { scale: 2 }).then(canvas => {
+            const imgData = canvas.toDataURL("image/png");
+            const { jsPDF } = window.jspdf;
+            const pdf = new jsPDF({ unit: "px", format: "a4" });
+            const margin = 20;
+            const pdfWidth = pdf.internal.pageSize.getWidth() - margin * 2;
+            const pdfHeight = (canvas.height * pdfWidth) / canvas.width;
+            pdf.addImage(imgData, "PNG", margin, margin, pdfWidth, pdfHeight);
+            pdf.save("flowchart.pdf");
+          });
+        });
 
-        function adicionarCategoria() {
-            const nome = document.getElementById('nomeCategoria').value;
-            const tipo = document.getElementById('tipoCategoria').value;
-            
-            if(nome) {
-                categorias.push({
-                    nome: nome,
-                    tipo: tipo
-                });
-                atualizarTabela();
-                fecharModal();
-                document.getElementById('nomeCategoria').value = '';
-            }
-        }
-
-        function editarCategoria(index) {
-            const novoNome = prompt('Editar categoria:', categorias[index].nome);
-            if(novoNome) {
-                categorias[index].nome = novoNome;
-                atualizarTabela();
-            }
-        }
-
-        function moverCategoria(index, direcao) {
-            if((direcao === -1 && index > 0) || (direcao === 1 && index < categorias.length - 1)) {
-                [categorias[index], categorias[index + direcao]] = [categorias[index + direcao], categorias[index]];
-                atualizarTabela();
-            }
-        }
-
-        function excluirCategoria(index) {
-            if(confirm('Tem certeza que deseja excluir esta categoria?')) {
-                categorias.splice(index, 1);
-                atualizarTabela();
-            }
-        }
-
-        function formatarMoeda(valor) {
-            const numero = typeof valor === 'string' ? 
-                parseFloat(valor.replace('R$ ', '').replace(/\./g, '').replace(',', '.')) : valor;
-            return 'R$ ' + numero.toLocaleString('pt-BR', {
-                minimumFractionDigits: 2,
-                maximumFractionDigits: 2
-            });
-        }
-
-        function atualizarTabela() {
-            const tabela = document.getElementById('planilha');
-            while(tabela.rows.length > 1) {
-                tabela.deleteRow(1);
-            }
-            
-            categorias.forEach((categoria, index) => {
-                const row = tabela.insertRow();
-                const cell = row.insertCell();
-                cell.className = 'categoria';
-                cell.innerHTML = `
-                    <span class="nome-categoria">${categoria.nome}</span>
-                    <span class="controles-categoria ${mostrarControles ? '' : 'hidden'}">
-                        <button onclick="editarCategoria(${index})">✏️</button>
-                        <button onclick="excluirCategoria(${index})">🗑️</button>
-                        <button onclick="moverCategoria(${index}, -1)">⬆️</button>
-                        <button onclick="moverCategoria(${index}, 1)">⬇️</button>
-                    </span>
-                `;
-            });
-            
-            const totalRow = tabela.insertRow();
-            totalRow.innerHTML = '<td class="total">Total</td>';
-            const acumuladoRow = tabela.insertRow();
-            acumuladoRow.innerHTML = '<td class="acumulado">Acumulado</td>';
-            
-            criarMeses();
-            calcularTotais();
-        }
-
-        function criarMeses() {
-            const tabela = document.getElementById('planilha');
-            const headerRow = tabela.rows[0];
-            
-            while(headerRow.cells.length > 1) {
-                headerRow.deleteCell(1);
-            }
-            
-            const data = new Date();
-            for(let i = 0; i < 24; i++) {
-                const mes = meses[data.getMonth()];
-                const ano = data.getFullYear();
-                const th = document.createElement('th');
-                th.textContent = `${mes}/${ano}`;
-                headerRow.appendChild(th);
-
-                for(let j = 1; j <= categorias.length; j++) {
-                    const td = document.createElement('td');
-                    const input = document.createElement('input');
-                    input.type = 'number';
-                    input.step = '0.01';
-                    input.className = 'valor';
-                    input.addEventListener('focus', (e) => e.target.select());
-                    td.appendChild(input);
-                    tabela.rows[j].appendChild(td);
-                }
-
-                const tdTotal = document.createElement('td');
-                tdTotal.className = 'total';
-                tdTotal.id = `total-${i}`;
-                tabela.rows[tabela.rows.length - 2].appendChild(tdTotal);
-
-                const tdAcumulado = document.createElement('td');
-                tdAcumulado.className = 'acumulado';
-                tdAcumulado.id = `acumulado-${i}`;
-                tabela.rows[tabela.rows.length - 1].appendChild(tdAcumulado);
-
-                data.setMonth(data.getMonth() + 1);
-            }
-        }
-
-        function atualizarGrafico() {
-            const acumulados = [];
-            for(let m = 0; m < 24; m++) {
-                const acumuladoElement = document.getElementById(`acumulado-${m}`);
-                acumulados.push(parseFloat(acumuladoElement.textContent.replace(/[^\d,-]/g, '').replace(',', '.')) || 0);
-            }
-
-            if(myChart) myChart.destroy();
-
-            const ctx = document.getElementById('graficoAcumulado').getContext('2d');
-            myChart = new Chart(ctx, {
-                type: 'line',
-                data: {
-                    labels: Array.from({length: 24}, (_, i) => `Mês ${i+1}`),
-                    datasets: [{
-                        label: 'Acumulado (R$)',
-                        data: acumulados,
-                        borderColor: '#3498db',
-                        borderWidth: 2,
-                        tension: 0.4,
-                        fill: false
-                    }]
-                },
-                options: {
-                    responsive: true,
-                    plugins: {
-                        tooltip: {
-                            callbacks: {
-                                label: (context) => formatarMoeda(context.raw)
-                            }
-                        }
-                    },
-                    scales: {
-                        y: {
-                            ticks: {
-                                callback: (value) => formatarMoeda(value)
-                            }
-                        }
-                    }
-                }
-            });
-        }
-
-        function calcularTotais() {
-            document.querySelectorAll('.valor').forEach(input => {
-                input.addEventListener('input', () => {
-                    const indexMes = input.parentElement.cellIndex - 1;
-                    const totalMes = document.getElementById(`total-${indexMes}`);
-                    
-                    let totalDespesas = 0;
-                    let totalReceitas = 0;
-                    
-                    document.querySelectorAll(`tr td:nth-child(${indexMes + 2}) input`).forEach((input, idx) => {
-                        const tipo = categorias[idx]?.tipo || 'despesa';
-                        const valor = parseFloat(input.value) || 0;
-                        
-                        if(tipo === 'despesa') totalDespesas += valor;
-                        else totalReceitas += valor;
-                    });
-                    
-                    const saldo = totalReceitas - totalDespesas;
-                    totalMes.textContent = formatarMoeda(saldo);
-                    totalMes.classList.toggle('negative', saldo < 0);
-
-                    let acumuladoTotal = 0;
-                    for(let m = 0; m < 24; m++) {
-                        const totalElement = document.getElementById(`total-${m}`);
-                        const valorTotal = parseFloat(totalElement.textContent.replace(/[^\d,-]/g, '').replace(',', '.')) || 0;
-                        acumuladoTotal += valorTotal;
-                        const acumuladoElement = document.getElementById(`acumulado-${m}`);
-                        acumuladoElement.textContent = formatarMoeda(acumuladoTotal);
-                        acumuladoElement.classList.toggle('negative', acumuladoTotal < 0);
-                    }
-                    
-                    atualizarGrafico();
-                });
-            });
-        }
-
-        window.onload = () => {
-            categorias = [
-                {nome: 'Aluguel', tipo: 'despesa'},
-                {nome: 'Salário', tipo: 'receita'},
-                {nome: 'Transporte', tipo: 'despesa'}
-            ];
-            atualizarTabela();
-        };
-    </script>
+        // Start with one box on load
+        createBox();
+      });
+    });
+  </script>
 </body>
 </html>
