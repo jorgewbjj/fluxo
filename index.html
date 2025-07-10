@@ -25,15 +25,23 @@
     }
 
     .box {
-      position: absolute; width: 180px; min-height: 60px;
-      background: #fff; border: 2px solid #444;
-      border-radius: 4px; box-sizing: border-box;
-      cursor: move; padding: 5px;
+      position: absolute; width: 200px; min-height: 80px;
+      border: 2px solid #444; border-radius: 4px;
+      background: #fff; box-sizing: border-box;
+      padding: 8px; cursor: move;
     }
-    .box:focus { outline: none; }
+    .box:focus-within { border-color: #007bff; }
+
+    /* editable content */
+    .box .main {
+      width: 100%; height: 100%;
+      outline: none; border: none;
+      font-size: 14px; line-height: 1.2;
+      resize: none; /* if using textarea */
+    }
 
     /* delete button */
-    .delete-btn {
+    .box .delete-btn {
       position: absolute; top: 4px; right: 4px;
       width: 18px; height: 18px; line-height: 16px;
       background: #e74c3c; color: #fff; border: none;
@@ -41,18 +49,18 @@
       cursor: pointer; z-index: 2;
     }
 
-    /* connection handle */
-    .handle {
-      position: absolute; bottom: 4px; right: 4px;
-      width: 14px; height: 14px; background: #444;
-      border-radius: 50%; cursor: crosshair; z-index: 1;
+    /* connection handles */
+    .box .handle {
+      position: absolute;
+      width: 12px; height: 12px;
+      background: #444; border-radius: 50%;
+      cursor: crosshair; z-index: 1;
     }
+    .box .handle-top    { top: -6px;   left: calc(50% - 6px); }
+    .box .handle-bottom { bottom: -6px; left: calc(50% - 6px); }
+    .box .handle-left   { left: -6px;   top: calc(50% - 6px); }
+    .box .handle-right  { right: -6px;  top: calc(50% - 6px); }
 
-    /* main label */
-    .main {
-      font-weight: bold; font-size: 14px;
-      word-wrap: break-word;
-    }
   </style>
 </head>
 <body>
@@ -77,12 +85,7 @@
 
       let boxCounter = 0;
 
-      function createBox(x = 50, y = 50) {
-        // ask for the title right away
-        let title = prompt("Enter title for this box:", "");
-        if (title === null) title = "";           // user pressed cancel
-        title = title.trim() || "Untitled";      // default if blank
-
+      function createBox(x = 60, y = 60) {
         boxCounter++;
         const id = 'box' + boxCounter;
         const box = document.createElement('div');
@@ -101,47 +104,48 @@
         });
         box.appendChild(del);
 
-        // main label
-        const main = document.createElement('div');
+        // editable main region
+        const main = document.createElement('textarea');
         main.className = 'main';
-        main.innerText = title;
+        main.value = 'Edit text...';
         box.appendChild(main);
 
-        // connection handle
-        const handle = document.createElement('div');
-        handle.className = 'handle';
-        box.appendChild(handle);
+        // four connection handles
+        ['top','right','bottom','left'].forEach(pos => {
+          const h = document.createElement('div');
+          h.className = 'handle handle-' + pos;
+          box.appendChild(h);
+          // source
+          instance.makeSource(h, {
+            parent: box,
+            anchor: pos.toUpperCase(),
+            connector: ['Flowchart', { cornerRadius: 5 }],
+            connectorStyle: { stroke: '#444', strokeWidth: 2 }
+          });
+          // target
+          instance.makeTarget(h, {
+            parent: box,
+            anchor: pos.toUpperCase(),
+            dropOptions: { hoverClass: 'dragHover' }
+          });
+        });
 
         document.getElementById('canvas').appendChild(box);
 
-        // make draggable, excluding the delete button and handle
+        // draggable, excluding handles & delete button
         instance.draggable(box, {
           containment: 'parent',
-          filter: '.delete-btn, .handle',
+          filter: '.handle, .delete-btn',
           filterExclude: true
-        });
-
-        // connection endpoints only on the handle
-        instance.makeSource(handle, {
-          parent: box,
-          anchor: 'Continuous',
-          connector: ['Flowchart', { cornerRadius: 5 }],
-          connectorStyle: { stroke: '#444', strokeWidth: 2 }
-        });
-        instance.makeTarget(handle, {
-          parent: box,
-          anchor: 'Continuous',
-          dropOptions: { hoverClass: 'dragHover' }
         });
       }
 
-      // Add Box button
+      // Add Box
       document.getElementById('add-box').addEventListener('click', () => {
-        // stagger new boxes so you can see them
         createBox(30 + boxCounter*20, 30 + boxCounter*20);
       });
 
-      // Export PDF button
+      // Export PDF
       document.getElementById('export-pdf').addEventListener('click', () => {
         html2canvas(document.getElementById('canvas'), { scale: 2 }).then(canvas => {
           const img = canvas.toDataURL('image/png');
@@ -155,7 +159,7 @@
         });
       });
 
-      // start with one box
+      // start with one
       createBox();
     });
   </script>
