@@ -6,49 +6,69 @@
   <title>Flowchart Builder w/ Firebase</title>
   <style>
     body, html {
-      margin:0; padding:0; height:100%; overflow:hidden;
+      margin: 0; padding: 0; height: 100%; overflow: hidden;
       font-family: Arial, sans-serif;
     }
     #toolbar {
-      height:50px; background:#333; color:#fff;
-      display:flex; align-items:center; padding:0 10px;
+      height: 50px; background: #333; color: #fff;
+      display: flex; align-items: center; padding: 0 10px;
     }
     #toolbar button {
-      margin-right:10px; padding:8px 12px;
-      border:none; background:#555; color:#fff; cursor:pointer;
+      margin-right: 10px; padding: 8px 12px;
+      border: none; background: #555; color: #fff; cursor: pointer;
     }
-    #toolbar button:hover { background:#666; }
+    #toolbar button:hover { background: #666; }
+
     #canvas {
-      position:relative; width:100%; height:calc(100%-50px);
-      background:#f0f0f0; overflow:auto;
+      position: relative;
+      width: 100%;
+      height: calc(100% - 50px);
+      background: #f0f0f0;
+      overflow: auto;
     }
+
     .box {
-      position:absolute; width:200px; min-height:80px;
-      border:2px solid #444; border-radius:4px;
-      background:#fff; box-sizing:border-box; padding:8px;
-      cursor:move;
+      position: absolute; width: 200px; min-height: 80px;
+      border: 2px solid #444; border-radius: 4px;
+      background: #fff; box-sizing: border-box; padding: 8px;
+      cursor: move;
     }
-    .box:focus-within { border-color:#007bff; }
+    .box:focus-within { border-color: #007bff; }
+
     .box .main {
-      width:100%; outline:none; border:none;
-      font-size:14px; line-height:1.2; resize:none; overflow:hidden;
+      width: 100%; outline: none; border: none;
+      font-size: 14px; line-height: 1.2; resize: none; overflow: hidden;
     }
+
     .box .delete-btn {
-      position:absolute; top:4px; right:4px;
-      width:18px; height:18px; line-height:16px;
-      background:#e74c3c; color:#fff; border:none;
-      border-radius:50%; text-align:center; font-size:12px;
-      cursor:pointer; z-index:2;
+      position: absolute; top: 4px; right: 4px;
+      width: 18px; height: 18px; line-height: 16px;
+      background: #e74c3c; color: #fff; border: none;
+      border-radius: 50%; text-align: center; font-size: 12px;
+      cursor: pointer; z-index: 2;
     }
+
     .box .handle {
-      position:absolute; width:12px; height:12px;
-      background:#444; border-radius:50%;
-      cursor:crosshair; z-index:1;
+      position: absolute; width: 12px; height: 12px;
+      background: #444; border-radius: 50%;
+      cursor: crosshair; z-index: 1;
     }
-    .box .handle-top    { top:-6px;    left:calc(50%-6px); }
-    .box .handle-right  { right:-6px;  top:calc(50%-6px); }
-    .box .handle-bottom { bottom:-6px; left:calc(50%-6px); }
-    .box .handle-left   { left:-6px;   top:calc(50%-6px); }
+    .box .handle-top {
+      top: -6px;
+      left: calc(50% - 6px);
+    }
+    .box .handle-right {
+      right: -6px;
+      top:   calc(50% - 6px);
+    }
+    .box .handle-bottom {
+      bottom: -6px;
+      left:   calc(50% - 6px);
+    }
+    .box .handle-left {
+      left:  -6px;
+      top:    calc(50% - 6px);
+    }
   </style>
 </head>
 <body>
@@ -69,204 +89,199 @@
   <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
 
   <script>
-  // ─── Firebase Setup ───────────────────────────────────────────────────────────
-const firebaseConfig = {
-  apiKey: "AIzaSyCgSkYIvenfEzyjef50OD01Ox9et-nyBMo",
-  authDomain: "fluxo-6d716.firebaseapp.com",
-  databaseURL: "https://fluxo-6d716-default-rtdb.firebaseio.com",
-  projectId: "fluxo-6d716",
-  storageBucket: "fluxo-6d716.firebasestorage.app",
-  messagingSenderId: "761253335013",
-  appId: "1:761253335013:web:44c30372a4749203a3690c"
-};
-  firebase.initializeApp(firebaseConfig);
-  const db = firebase.database();
-  const boardRef = db.ref('boards/board1');
+    // ─── Firebase Setup ─────────────────────────────────────────────────────────
+    const firebaseConfig = {
+      apiKey: "AIzaSyCgSkYIvenfEzyjef50OD01Ox9et-nyBMo",
+      authDomain: "fluxo-6d716.firebaseapp.com",
+      databaseURL: "https://fluxo-6d716-default-rtdb.firebaseio.com",
+      projectId: "fluxo-6d716",
+      storageBucket: "fluxo-6d716.firebasestorage.app",
+      messagingSenderId: "761253335013",
+      appId: "1:761253335013:web:44c30372a4749203a3690c"
+    };
+    firebase.initializeApp(firebaseConfig);
+    const db = firebase.database();
+    const boardRef = db.ref('boards/board1');
 
-  // ─── In-memory board state ────────────────────────────────────────────────────
-  const board = {
-    boxes: {},        // id → { x, y, text }
-    connections: {}   // connId → { sourceId, targetId, anchors }
-  };
+    // ─── In-memory board state ─────────────────────────────────────────────────
+    const board = {
+      boxes: {},        // id → { x, y, text }
+      connections: {}   // connId → { sourceId, targetId, anchors }
+    };
 
-  function saveBoard() {
-    boardRef.set(board);
-  }
-
-  // ─── jsPlumb & UI setup ───────────────────────────────────────────────────────
-  document.addEventListener('DOMContentLoaded', () => {
-    const instance = jsPlumb.getInstance();
-    instance.setContainer('canvas');
-
-    // Delete connection on click + update state
-    instance.bind('click', (conn, evt) => {
-      if (!confirm('Delete this connection?')) return;
-      const id = conn.getParameter('connId');
-      instance.deleteConnection(conn);
-      delete board.connections[id];
-      saveBoard();
-    });
-
-    let boxCounter = 0;
-
-    // Auto-resize textarea and repaint connections
-    function adjustHeight(ta) {
-      ta.style.height = 'auto';
-      ta.style.height = ta.scrollHeight + 'px';
-      instance.repaint(ta.parentElement);
+    function saveBoard() {
+      boardRef.set(board);
     }
 
-    function createBox(x = 60, y = 60, text = 'Edit text...', id = null) {
-      // assign or reuse id
-      if (!id) id = 'box' + (++boxCounter);
-      else boxCounter = Math.max(boxCounter, parseInt(id.replace('box','')));
-      
-      const box = document.createElement('div');
-      box.id = id;
-      box.className = 'box';
-      box.style.left = x + 'px';
-      box.style.top  = y + 'px';
+    // ─── jsPlumb & UI setup ─────────────────────────────────────────────────────
+    document.addEventListener('DOMContentLoaded', () => {
+      const instance = jsPlumb.getInstance();
+      instance.setContainer('canvas');
 
-      // delete button
-      const del = document.createElement('button');
-      del.className = 'delete-btn';
-      del.innerText = '×';
-      del.addEventListener('click', e => {
-        e.stopPropagation();
-        instance.remove(box);
-        delete board.boxes[id];
-        // remove any related connections
-        for (let cid in board.connections) {
-          const c = board.connections[cid];
-          if (c.sourceId===id||c.targetId===id) {
-            delete board.connections[cid];
-          }
-        }
+      // click on a connection to delete it
+      instance.bind('click', (conn, evt) => {
+        if (!confirm('Delete this connection?')) return;
+        const id = conn.getParameter('connId');
+        instance.deleteConnection(conn);
+        delete board.connections[id];
         saveBoard();
       });
-      box.appendChild(del);
 
-      // editable main textarea
-      const main = document.createElement('textarea');
-      main.className = 'main';
-      main.value = text;
-      main.addEventListener('input', () => {
-        adjustHeight(main);
-        board.boxes[id].text = main.value;
-        saveBoard();
-      });
-      main.addEventListener('mouseenter', () => adjustHeight(main));
-      box.appendChild(main);
-      adjustHeight(main);
+      let boxCounter = 0;
 
-      // four handles
-      ['Top','Right','Bottom','Left'].forEach(anchor => {
-        const h = document.createElement('div');
-        h.className = 'handle handle-' + anchor.toLowerCase();
-        box.appendChild(h);
-        // make source
-        instance.makeSource(h, {
-          parent: box,
-          anchor: anchor,
-          connector: ['Flowchart', { cornerRadius:5 }],
-          connectorStyle: { stroke:'#444', strokeWidth:2 },
-          maxConnections: -1
-        });
-        // make target
-        instance.makeTarget(h, {
-          parent: box,
-          anchor: anchor,
-          dropOptions: { hoverClass:'dragHover' }
-        });
-      });
-
-      document.getElementById('canvas').appendChild(box);
-
-      // draggable excluding handles + delete
-      instance.draggable(box, {
-        containment:'parent',
-        filter:'.handle, .delete-btn',
-        filterExclude:true,
-        stop: (_, ui) => {
-          board.boxes[id].x = ui.pos.left;
-          board.boxes[id].y = ui.pos.top;
-          saveBoard();
-        }
-      });
-
-      // record in board state
-      board.boxes[id] = { x, y, text };
-      saveBoard();
-
-      return box;
-    }
-
-    // When a new connection is established, record it
-    instance.bind('connection', (info, originalEvent) => {
-      const conn = info.connection;
-      // give it a unique parameter
-      const cid = 'conn' + Date.now() + Math.floor(Math.random()*1000);
-      conn.setParameter('connId', cid);
-      board.connections[cid] = {
-        sourceId: info.sourceId,
-        targetId: info.targetId,
-        anchors: [ info.sourceEndpoint.anchor.type, info.targetEndpoint.anchor.type ]
-      };
-      saveBoard();
-    });
-
-    // Load existing board from Firebase
-    boardRef.on('value', snap => {
-      const data = snap.val();
-      if (!data) return;
-      // clear canvas
-      jsPlumb.reset();
-      document.getElementById('canvas').innerHTML = '';
-      Object.assign(board, data);
-      // re-create boxes
-      for (let id in board.boxes) {
-        const b = board.boxes[id];
-        createBox(b.x, b.y, b.text, id);
+      // auto-resize textarea
+      function adjustHeight(ta) {
+        ta.style.height = 'auto';
+        ta.style.height = ta.scrollHeight + 'px';
+        instance.repaint(ta.parentElement);
       }
-      // re-create connections
-      setTimeout(() => {
-        for (let cid in board.connections) {
-          const c = board.connections[cid];
-          const conn = instance.connect({
-            source: c.sourceId,
-            target: c.targetId,
-            anchors: c.anchors,
-            connector: ['Flowchart',{cornerRadius:5}],
-            paintStyle:{ stroke:'#444', strokeWidth:2 }
+
+      function createBox(x = 60, y = 60, text = 'Edit text...', id = null) {
+        if (!id) id = 'box' + (++boxCounter);
+        else boxCounter = Math.max(boxCounter, parseInt(id.replace('box','')));
+
+        const box = document.createElement('div');
+        box.id = id;
+        box.className = 'box';
+        box.style.left = x + 'px';
+        box.style.top  = y + 'px';
+
+        // delete button
+        const del = document.createElement('button');
+        del.className = 'delete-btn';
+        del.innerText = '×';
+        del.addEventListener('click', e => {
+          e.stopPropagation();
+          instance.remove(box);
+          delete board.boxes[id];
+          // remove related connections
+          for (let cid in board.connections) {
+            const c = board.connections[cid];
+            if (c.sourceId===id || c.targetId===id) {
+              delete board.connections[cid];
+            }
+          }
+          saveBoard();
+        });
+        box.appendChild(del);
+
+        // editable textarea
+        const main = document.createElement('textarea');
+        main.className = 'main';
+        main.value = text;
+        main.addEventListener('input', () => {
+          adjustHeight(main);
+          board.boxes[id].text = main.value;
+          saveBoard();
+        });
+        main.addEventListener('mouseenter', () => adjustHeight(main));
+        box.appendChild(main);
+        adjustHeight(main);
+
+        // four connection handles
+        ['Top','Right','Bottom','Left'].forEach(anchor => {
+          const h = document.createElement('div');
+          h.className = 'handle handle-' + anchor.toLowerCase();
+          box.appendChild(h);
+          instance.makeSource(h, {
+            parent: box,
+            anchor: anchor,
+            connector: ['Flowchart', { cornerRadius: 5 }],
+            connectorStyle: { stroke: '#444', strokeWidth: 2 },
+            maxConnections: -1
           });
-          conn.setParameter('connId', cid);
+          instance.makeTarget(h, {
+            parent: box,
+            anchor: anchor,
+            dropOptions: { hoverClass: 'dragHover' }
+          });
+        });
+
+        document.getElementById('canvas').appendChild(box);
+
+        // draggable (exclude handles + delete)
+        instance.draggable(box, {
+          containment: 'parent',
+          filter: '.handle, .delete-btn',
+          filterExclude: true,
+          stop: (_, ui) => {
+            board.boxes[id].x = ui.pos.left;
+            board.boxes[id].y = ui.pos.top;
+            saveBoard();
+          }
+        });
+
+        // record box
+        board.boxes[id] = { x, y, text };
+        saveBoard();
+
+        return box;
+      }
+
+      // record new connections
+      instance.bind('connection', (info) => {
+        const conn = info.connection;
+        const cid = 'conn' + Date.now() + Math.floor(Math.random()*1000);
+        conn.setParameter('connId', cid);
+        board.connections[cid] = {
+          sourceId: info.sourceId,
+          targetId: info.targetId,
+          anchors: [ info.sourceEndpoint.anchor.type, info.targetEndpoint.anchor.type ]
+        };
+        saveBoard();
+      });
+
+      // load & render from Firebase
+      boardRef.on('value', snap => {
+        const data = snap.val();
+        if (!data) return;
+        jsPlumb.reset();
+        document.getElementById('canvas').innerHTML = '';
+        Object.assign(board, data);
+        for (let id in board.boxes) {
+          const b = board.boxes[id];
+          createBox(b.x, b.y, b.text, id);
         }
-      }, 100); // allow boxes to render first
-    });
+        // after boxes are in DOM, re-create connections
+        setTimeout(() => {
+          for (let cid in board.connections) {
+            const c = board.connections[cid];
+            const conn = instance.connect({
+              source: c.sourceId,
+              target: c.targetId,
+              anchors: c.anchors,
+              connector: ['Flowchart',{cornerRadius:5}],
+              paintStyle:{ stroke:'#444', strokeWidth:2 }
+            });
+            conn.setParameter('connId', cid);
+          }
+        }, 100);
+      });
 
-    // “Add Box” button
-    document.getElementById('add-box').addEventListener('click', () => {
-      createBox(30 + boxCounter*20, 30 + boxCounter*20);
-    });
+      // Add Box handler
+      document.getElementById('add-box').addEventListener('click', () => {
+        createBox(30 + boxCounter*20, 30 + boxCounter*20);
+      });
 
-    // Export PDF
-    document.getElementById('export-pdf').addEventListener('click', () => {
-      html2canvas(document.getElementById('canvas'),{scale:2}).then(canvas=>{
-        const img=canvas.toDataURL('image/png');
-        const { jsPDF } = window.jspdf;
-        const pdf = new jsPDF({unit:'px', format:'a4'});
-        const m=20, w=pdf.internal.pageSize.getWidth()-m*2;
-        const h=canvas.height*(w/canvas.width);
-        pdf.addImage(img,'PNG',m,m,w,h);
-        pdf.save('flowchart.pdf');
+      // Export PDF handler
+      document.getElementById('export-pdf').addEventListener('click', () => {
+        html2canvas(document.getElementById('canvas'), { scale: 2 }).then(canvas => {
+          const img = canvas.toDataURL('image/png');
+          const { jsPDF } = window.jspdf;
+          const pdf = new jsPDF({ unit: 'px', format: 'a4' });
+          const margin = 20;
+          const w = pdf.internal.pageSize.getWidth() - margin*2;
+          const h = canvas.height * (w / canvas.width);
+          pdf.addImage(img, 'PNG', margin, margin, w, h);
+          pdf.save('flowchart.pdf');
+        });
+      });
+
+      // initialize Firebase nodemap
+      boardRef.once('value').then(snap => {
+        if (!snap.exists()) saveBoard();
       });
     });
-
-    // initially load (or create fresh)
-    boardRef.once('value').then(snap=>{
-      if (!snap.exists()) saveBoard();
-    });
-  });
   </script>
 </body>
 </html>
