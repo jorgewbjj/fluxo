@@ -45,10 +45,10 @@
       background:#444; border-radius:50%;
       cursor:crosshair; z-index:1;
     }
-    .box .handle-top    { top:-6px;            left:calc(50% - 6px); }
-    .box .handle-right  { right:-6px;          top:calc(50% - 6px); }
-    .box .handle-bottom { bottom:-6px;         left:calc(50% - 6px); }
-    .box .handle-left   { left:-6px;           top:calc(50% - 6px); }
+    .box .handle-top    { top:-6px;         left:calc(50% - 6px); }
+    .box .handle-right  { right:-6px;       top:calc(50% - 6px); }
+    .box .handle-bottom { bottom:-6px;      left:calc(50% - 6px); }
+    .box .handle-left   { left:-6px;        top:calc(50% - 6px); }
   </style>
 </head>
 <body>
@@ -69,7 +69,7 @@
   <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
 
   <script>
-    // ─── Firebase Setup ─────────────────────────────────────────────────────────
+    // ─── Firebase Setup ────────────────────────────────────────────────────
     const firebaseConfig = {
       apiKey: "AIzaSyCgSkYIvenfEzyjef50OD01Ox9et-nyBMo",
       authDomain: "fluxo-6d716.firebaseapp.com",
@@ -83,7 +83,7 @@
     const db = firebase.database();
     const boardRef = db.ref('boards/board1');
 
-    // ─── In-memory board state ─────────────────────────────────────────────────
+    // ─── In-memory state ─────────────────────────────────────────────────────
     const board = { boxes: {}, connections: {} };
     function saveBoard() { boardRef.set(board); }
 
@@ -91,13 +91,13 @@
       const instance = jsPlumb.getInstance();
       instance.setContainer('canvas');
 
-      // click-to-delete on connections
+      // delete connection on click + immediate save
       instance.bind('click', (conn) => {
-        if (confirm('Delete this connection?')) {
-          const cid = conn.getParameter('connId');
-          instance.deleteConnection(conn);
-          delete board.connections[cid];
-        }
+        if (!confirm('Delete this connection?')) return;
+        const cid = conn.getParameter('connId');
+        instance.deleteConnection(conn);
+        delete board.connections[cid];
+        saveBoard();
       });
 
       let boxCounter = 0;
@@ -109,134 +109,144 @@
         instance.repaint(ta.parentElement);
       }
 
-      function createBox(x=60,y=60,text='Edit text...', id=null){
-        if (!id) id = 'box'+(++boxCounter);
-        else    boxCounter = Math.max(boxCounter, +id.replace('box',''));
+      // create or re-create a box
+      function createBox(x=60, y=60, text='Edit text...', id=null) {
+        if (!id) id = 'box' + (++boxCounter);
+        else    boxCounter = Math.max(boxCounter, parseInt(id.replace('box',''),10));
 
         const box = document.createElement('div');
         box.id = id; box.className = 'box';
-        box.style.left=`${x}px`; box.style.top=`${y}px`;
+        box.style.left = x + 'px'; box.style.top = y + 'px';
 
-        // delete btn
+        // delete button
         const del = document.createElement('button');
-        del.className='delete-btn'; del.innerText='×';
-        del.onclick=e=>{
-          e.stopPropagation(); instance.remove(box);
+        del.className = 'delete-btn'; del.innerText = '×';
+        del.addEventListener('click', (e) => {
+          e.stopPropagation();
+          instance.remove(box);
           delete board.boxes[id];
-          for(let c in board.connections){
-            const cc=board.connections[c];
-            if(cc.sourceId===id||cc.targetId===id) delete board.connections[c];
+          for (let cid in board.connections) {
+            const c = board.connections[cid];
+            if (c.sourceId===id || c.targetId===id) {
+              delete board.connections[cid];
+            }
           }
-        };
+          saveBoard();
+        });
         box.appendChild(del);
 
         // editable textarea
         const main = document.createElement('textarea');
-        main.className='main'; main.value=text;
-        main.oninput=()=> {
-          adjustHeight(main);
+        main.className = 'main';
+        main.value = text;
+        main.addEventListener('input', () => {
           board.boxes[id].text = main.value;
-        };
-        main.onmouseenter=()=> adjustHeight(main);
+        });
+        main.addEventListener('mouseenter', () => adjustHeight(main));
         box.appendChild(main);
         adjustHeight(main);
 
-        // 4 handles
-        ['Top','Right','Bottom','Left'].forEach(anchor=>{
-          const h=document.createElement('div');
-          h.className=`handle handle-${anchor.toLowerCase()}`;
+        // four connection handles
+        ['Top','Right','Bottom','Left'].forEach(anchor => {
+          const h = document.createElement('div');
+          h.className = 'handle handle-' + anchor.toLowerCase();
           box.appendChild(h);
-          instance.makeSource(h,{
-            parent:box, anchor,
-            connector:['Flowchart',{cornerRadius:5}],
-            connectorStyle:{stroke:'#444',strokeWidth:2},
-            maxConnections:-1
+          instance.makeSource(h, {
+            parent: box,
+            anchor,
+            connector: ['Flowchart',{cornerRadius:5}],
+            connectorStyle: { stroke:'#444', strokeWidth:2 },
+            maxConnections: -1
           });
-          instance.makeTarget(h,{
-            parent:box, anchor,
-            dropOptions:{hoverClass:'dragHover'}
+          instance.makeTarget(h, {
+            parent: box,
+            anchor,
+            dropOptions: { hoverClass:'dragHover' }
           });
         });
 
         document.getElementById('canvas').appendChild(box);
 
-        // draggable (exclude handles + delete)
-        instance.draggable(box,{
+        // draggable + save on stop
+        instance.draggable(box, {
           containment:'parent',
           filter:'.handle, .delete-btn',
           filterExclude:true,
-          stop:(_,ui)=> {
+          stop: (_, ui) => {
             board.boxes[id].x = ui.pos.left;
             board.boxes[id].y = ui.pos.top;
+            saveBoard();
           }
         });
 
-        // record
+        // record and save upon creation
         board.boxes[id] = { x, y, text };
+        saveBoard();
+
         return box;
       }
 
-      // when connections are made
-      instance.bind('connection', info=>{
-        const conn=info.connection;
-        const cid='conn'+Date.now()+Math.floor(Math.random()*1000);
-        conn.setParameter('connId',cid);
-        board.connections[cid]={
+      // record new connections + immediate save
+      instance.bind('connection', info => {
+        const conn = info.connection;
+        const cid = 'conn' + Date.now() + Math.floor(Math.random()*1000);
+        conn.setParameter('connId', cid);
+        board.connections[cid] = {
           sourceId: info.sourceId,
           targetId: info.targetId,
-          anchors: [ info.sourceEndpoint.anchor.type, info.targetEndpoint.anchor.type ]
+          anchors: [info.sourceEndpoint.anchor.type, info.targetEndpoint.anchor.type]
         };
+        saveBoard();
       });
 
-      // initial load — only once
-      boardRef.once('value').then(snap=>{
-        const data=snap.val();
-        if(data) {
-          Object.assign(board, data);
-          // render boxes
-          for(let id in board.boxes){
-            const b=board.boxes[id];
-            createBox(b.x,b.y,b.text,id);
-          }
-          // after a tick, recreate connections
-          setTimeout(()=>{
-            for(let cid in board.connections){
-              const c=board.connections[cid];
-              const conn=instance.connect({
-                source:c.sourceId, target:c.targetId,
-                anchors:c.anchors,
-                connector:['Flowchart',{cornerRadius:5}],
-                paintStyle:{stroke:'#444',strokeWidth:2}
-              });
-              conn.setParameter('connId',cid);
-            }
-          },100);
+      // one-time load from Firebase
+      boardRef.once('value').then(snap => {
+        const data = snap.val();
+        if (!data) return;
+        Object.assign(board, data);
+        // render boxes
+        for (let id in board.boxes) {
+          const b = board.boxes[id];
+          createBox(b.x, b.y, b.text, id);
         }
+        // then restore connections
+        setTimeout(() => {
+          for (let cid in board.connections) {
+            const c = board.connections[cid];
+            const connection = instance.connect({
+              source: c.sourceId,
+              target: c.targetId,
+              anchors: c.anchors,
+              connector: ['Flowchart',{cornerRadius:5}],
+              paintStyle:{ stroke:'#444', strokeWidth:2 }
+            });
+            connection.setParameter('connId', cid);
+          }
+        }, 100);
       });
 
-      // Add Box
-      document.getElementById('add-box').onclick = ()=>{
-        createBox(30+boxCounter*20, 30+boxCounter*20);
-      };
+      // Add Box UI
+      document.getElementById('add-box').addEventListener('click', () => {
+        createBox(30 + boxCounter*20, 30 + boxCounter*20);
+      });
 
-      // Export PDF
-      document.getElementById('export-pdf').onclick = ()=>{
-        html2canvas(document.getElementById('canvas'),{scale:2})
-          .then(canvas=>{
-            const img=canvas.toDataURL('image/png');
-            const { jsPDF }= window.jspdf;
-            const pdf=new jsPDF({unit:'px',format:'a4'});
-            const m=20, w=pdf.internal.pageSize.getWidth()-m*2;
-            const h=canvas.height*(w/canvas.width);
-            pdf.addImage(img,'PNG',m,m,w,h);
-            pdf.save('flowchart.pdf');
-          });
-      };
+      // Export PDF UI
+      document.getElementById('export-pdf').addEventListener('click', () => {
+        html2canvas(document.getElementById('canvas'), { scale: 2 }).then(canvas => {
+          const img = canvas.toDataURL('image/png');
+          const { jsPDF } = window.jspdf;
+          const pdf = new jsPDF({ unit:'px', format:'a4' });
+          const margin = 20;
+          const w = pdf.internal.pageSize.getWidth() - margin*2;
+          const h = canvas.height * (w / canvas.width);
+          pdf.addImage(img, 'PNG', margin, margin, w, h);
+          pdf.save('flowchart.pdf');
+        });
+      });
 
-      // periodic save every 60s
+      // periodic backup every 60s
       setInterval(saveBoard, 60_000);
-
-      // and save when user leaves
+      // save on exit
       window.addEventListener('beforeunload', saveBoard);
     });
   </script>
