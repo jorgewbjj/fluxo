@@ -23,13 +23,33 @@
       background: #f0f0f0; overflow: auto;
     }
     .box {
-      position: absolute; width: 150px; min-height: 60px;
+      position: absolute; width: 180px; min-height: 80px;
       border: 2px solid #444; border-radius: 4px;
-      background: #fff; padding: 5px; box-sizing: border-box;
-      cursor: move;
+      background: #fff; box-sizing: border-box;
+      cursor: move; padding: 5px;
     }
-    .box:focus {
-      outline: none; border-color: #007bff;
+    .box:focus-within {
+      border-color: #007bff;
+    }
+    .box .main {
+      font-weight: bold;
+      outline: none;
+      cursor: text;
+    }
+    .box .detail {
+      display: none;
+      position: absolute;
+      top: 0; left: 0;
+      width: 100%; height: 100%;
+      background: rgba(255,255,255,0.95);
+      border-radius: 4px;
+      padding: 8px;
+      box-sizing: border-box;
+      cursor: text;
+      outline: none;
+    }
+    .box:hover .detail {
+      display: block;
     }
   </style>
 </head>
@@ -49,16 +69,12 @@
   <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
 
   <script>
-    // Wait until the browser has parsed everything
     document.addEventListener('DOMContentLoaded', () => {
-      // 1) get your jsPlumb instance
       const instance = jsPlumb.getInstance();
-      // 2) tell it which div is your drawing surface
       instance.setContainer('canvas');
 
       let boxCounter = 0;
 
-      // our box‐creator
       function createBox(x = 50, y = 50) {
         boxCounter++;
         const id = 'box' + boxCounter;
@@ -67,13 +83,27 @@
         box.className = 'box';
         box.style.left = x + 'px';
         box.style.top  = y + 'px';
-        box.contentEditable = true;
-        box.innerText = 'Edit me…';
+
+        // Main label
+        const main = document.createElement('div');
+        main.className = 'main';
+        main.contentEditable = true;
+        main.innerText = 'Title…';
+        box.appendChild(main);
+
+        // Detail overlay
+        const detail = document.createElement('div');
+        detail.className = 'detail';
+        detail.contentEditable = true;
+        detail.innerText = 'Details…';
+        box.appendChild(detail);
+
         document.getElementById('canvas').appendChild(box);
 
-        // make it draggable
+        // Make draggable
         instance.draggable(box, { containment: 'parent' });
-        // allow it to be a source _and_ target
+
+        // Connections
         instance.makeSource(box, {
           anchor: 'Continuous',
           connector: ['Flowchart', { cornerRadius: 5 }],
@@ -85,29 +115,26 @@
         });
       }
 
-      // hook up Add Box
+      // Add Box button
       document.getElementById('add-box').addEventListener('click', () => {
-        console.log('Add Box clicked');
-        // stagger them so you can see each new one
-        createBox(20 + boxCounter * 15, 20 + boxCounter * 15);
+        createBox(30 + boxCounter * 20, 30 + boxCounter * 20);
       });
 
-      // hook up Export PDF
+      // Export PDF button
       document.getElementById('export-pdf').addEventListener('click', () => {
-        console.log('Export PDF clicked');
         html2canvas(document.getElementById('canvas'), { scale: 2 }).then(canvas => {
           const img = canvas.toDataURL('image/png');
           const { jsPDF } = window.jspdf;
           const pdf = new jsPDF({ unit: 'px', format: 'a4' });
-          const m = 20;
-          const w = pdf.internal.pageSize.getWidth() - m*2;
+          const margin = 20;
+          const w = pdf.internal.pageSize.getWidth() - margin*2;
           const h = canvas.height * (w / canvas.width);
-          pdf.addImage(img, 'PNG', m, m, w, h);
+          pdf.addImage(img, 'PNG', margin, margin, w, h);
           pdf.save('flowchart.pdf');
         });
       });
 
-      // draw the first box so you know it’s working
+      // Start with one box
       createBox();
     });
   </script>
