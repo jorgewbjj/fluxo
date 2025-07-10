@@ -25,12 +25,12 @@
     }
 
     .box {
-      position: absolute; width: 200px; min-height: 100px;
-      border: 2px solid #444; border-radius: 4px;
-      background: #fff; box-sizing: border-box;
-      padding: 5px; cursor: move;
+      position: absolute; width: 180px; min-height: 60px;
+      background: #fff; border: 2px solid #444;
+      border-radius: 4px; box-sizing: border-box;
+      cursor: move; padding: 5px;
     }
-    .box:focus-within { border-color: #007bff; }
+    .box:focus { outline: none; }
 
     /* delete button */
     .delete-btn {
@@ -48,23 +48,11 @@
       border-radius: 50%; cursor: crosshair; z-index: 1;
     }
 
-    /* title input */
+    /* main label */
     .main {
-      width: 100%; border: none; outline: none;
       font-weight: bold; font-size: 14px;
-      margin-bottom: 5px;
+      word-wrap: break-word;
     }
-
-    /* detail textarea (hidden until hover) */
-    .detail {
-      position: absolute; top: 0; left: 0;
-      width: 100%; height: 100%;
-      border: none; outline: none;
-      padding: 5px; box-sizing: border-box;
-      resize: none; background: rgba(255,255,255,0.95);
-      display: none; font-size: 12px;
-    }
-    .box:hover .detail { display: block; }
   </style>
 </head>
 <body>
@@ -75,7 +63,7 @@
   </div>
   <div id="canvas"></div>
 
-  <!-- jsPlumb -->
+  <!-- jsPlumb CE -->
   <script src="https://cdn.jsdelivr.net/npm/jsplumb@2.15.6/dist/js/jsplumb.min.js"></script>
   <!-- html2canvas -->
   <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
@@ -90,6 +78,11 @@
       let boxCounter = 0;
 
       function createBox(x = 50, y = 50) {
+        // ask for the title right away
+        let title = prompt("Enter title for this box:", "");
+        if (title === null) title = "";           // user pressed cancel
+        title = title.trim() || "Untitled";      // default if blank
+
         boxCounter++;
         const id = 'box' + boxCounter;
         const box = document.createElement('div');
@@ -99,27 +92,20 @@
         box.style.top  = y + 'px';
 
         // delete button
-        const deleteBtn = document.createElement('button');
-        deleteBtn.className = 'delete-btn';
-        deleteBtn.innerText = '×';
-        deleteBtn.addEventListener('click', e => {
+        const del = document.createElement('button');
+        del.className = 'delete-btn';
+        del.innerText = '×';
+        del.addEventListener('click', e => {
           e.stopPropagation();
           instance.remove(box);
         });
-        box.appendChild(deleteBtn);
+        box.appendChild(del);
 
-        // title input
-        const main = document.createElement('input');
+        // main label
+        const main = document.createElement('div');
         main.className = 'main';
-        main.type = 'text';
-        main.value = 'Title';
+        main.innerText = title;
         box.appendChild(main);
-
-        // detail textarea
-        const detail = document.createElement('textarea');
-        detail.className = 'detail';
-        detail.value = 'More details...';
-        box.appendChild(detail);
 
         // connection handle
         const handle = document.createElement('div');
@@ -128,14 +114,14 @@
 
         document.getElementById('canvas').appendChild(box);
 
-        // draggable, excluding form controls & delete button
+        // make draggable, excluding the delete button and handle
         instance.draggable(box, {
           containment: 'parent',
-          filter: '.main, .detail, .delete-btn, .handle',
+          filter: '.delete-btn, .handle',
           filterExclude: true
         });
 
-        // make handle both source & target
+        // connection endpoints only on the handle
         instance.makeSource(handle, {
           parent: box,
           anchor: 'Continuous',
@@ -149,12 +135,13 @@
         });
       }
 
-      // Add Box
+      // Add Box button
       document.getElementById('add-box').addEventListener('click', () => {
-        createBox(30 + boxCounter * 20, 30 + boxCounter * 20);
+        // stagger new boxes so you can see them
+        createBox(30 + boxCounter*20, 30 + boxCounter*20);
       });
 
-      // Export PDF
+      // Export PDF button
       document.getElementById('export-pdf').addEventListener('click', () => {
         html2canvas(document.getElementById('canvas'), { scale: 2 }).then(canvas => {
           const img = canvas.toDataURL('image/png');
